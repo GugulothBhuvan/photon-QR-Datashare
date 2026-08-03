@@ -14,9 +14,14 @@ behaviour, and the application is an implementation of that specification.
 
 ## Status
 
-**Phase 0 — Project Setup.** The skeleton, toolchain and CI are in place; no
-protocol or product logic has been implemented yet. See
-`planning/IMPLEMENTATION_PLAN.md` for the phase sequence.
+**Phase 1 — Architecture Foundation.** The skeleton, toolchain and CI are in
+place (P0), and the architectural machinery now compiles and is tested (P1):
+dependency injection, event bus, repository pattern, state store,
+configuration, logging and the shared error model.
+
+No protocol or product logic exists yet — that begins with the domain models in
+Phase 2. See `planning/IMPLEMENTATION_PLAN.md` for the phase sequence and
+`ARCHITECTURE_GRAPH.md` for how the layers fit together.
 
 ---
 

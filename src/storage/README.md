@@ -32,10 +32,20 @@ An adapter that knows what a packet is has already broken this boundary.
 
 ## Public exports
 
-None yet — Phase 0 left a placeholder barrel.
+| Export                      | Kind                                                          |
+| --------------------------- | ------------------------------------------------------------- |
+| `KeyValueStore`             | Port — synchronous key-value storage for small records        |
+| `FileStore`                 | Port — asynchronous file read, write, delete, exists          |
+| `FileReference`             | Handle to a stored file                                       |
+| `createMemoryKeyValueStore` | In-memory `KeyValueStore`; backs tests and the default wiring |
 
-Planned surface. Authoritative signatures live in `docs/API_SPEC.md`; secure
-storage requirements are defined by `docs/SECURITY.md` (P11 / SEC-002).
+Implementations SHALL throw only `AppError` — platform exceptions do not cross
+an API boundary (`docs/API_SPEC.md` §12).
+
+### Planned
+
+Authoritative signatures live in `docs/API_SPEC.md`; secure storage
+requirements are defined by `docs/SECURITY.md` (P11 / SEC-002).
 
 | Export                    | Wraps                                           |
 | ------------------------- | ----------------------------------------------- |

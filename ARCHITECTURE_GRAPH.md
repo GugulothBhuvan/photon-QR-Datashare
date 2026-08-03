@@ -27,7 +27,8 @@ graph TD
 
     ST["State<br/><small>state</small>"]
     EV["Event Bus<br/><small>events</small>"]
-    SH["Shared<br/><small>types · utils · constants · telemetry</small>"]
+    SH["Shared<br/><small>types · utils · constants</small>"]
+    TEL["Telemetry<br/><small>telemetry</small>"]
     CFG["Config / DI<br/><small>config</small>"]
 
     UI --> CTL
@@ -53,10 +54,20 @@ graph TD
     CORE -.-> SH
     REPO -.-> SH
     ADPT -.-> SH
+
+    CTL -.-> TEL
+    SVC -.-> TEL
+    REPO -.-> TEL
+    ADPT -.-> TEL
 ```
 
 Solid edges are the layer hierarchy. Dotted edges are cross-cutting: state,
 events, shared utilities, and the composition root.
+
+Note that `core` reaches `types`, `utils` and `constants` but **not**
+`telemetry` or `events`. `planning/DEPENDENCIES.md` §4 allows the core only
+domain models and utilities, and a logger or a bus is a side-effecting
+collaborator: the core receives one as an argument if it needs one at all.
 
 Plain-text equivalent:
 

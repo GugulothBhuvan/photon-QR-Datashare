@@ -32,11 +32,20 @@ Bypassing a repository to reach storage directly is a non-negotiable violation
 
 ## Public exports
 
-None yet — Phase 0 left a placeholder barrel.
+Phase 1 (ARC-003) established the pattern; the concrete repositories arrive
+with the domain models they persist.
 
-Planned surface, from `planning/IMPLEMENTATION_PLAN.md` (P2, P7) and
-`planning/TASK_GRAPH.md` (REC-001). Authoritative signatures live in
-`docs/API_SPEC.md`.
+| Export                     | Kind                                                     |
+| -------------------------- | -------------------------------------------------------- |
+| `Repository<TId, TEntity>` | Interface — collection of entities keyed by id           |
+| `ValueRepository<TValue>`  | Interface — a single stored value, e.g. preferences      |
+| `createKeyValueRepository` | Generic implementation over a `KeyValueStore` port       |
+| `EntityCodec`              | Injected serialization and validation for stored records |
+
+### Planned
+
+From `planning/IMPLEMENTATION_PLAN.md` (P2, P7) and `planning/TASK_GRAPH.md`
+(REC-001). Authoritative signatures live in `docs/API_SPEC.md`.
 
 | Export              | Persists                         | Phase        |
 | ------------------- | -------------------------------- | ------------ |

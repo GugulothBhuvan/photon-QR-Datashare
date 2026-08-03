@@ -150,6 +150,12 @@ module.exports = [
         '@hooks/*',
         '@/state/*',
         '@/hooks/*',
+        // DEPENDENCIES.md §4 allows the core only domain models and utilities.
+        // A logger is a side-effecting collaborator: inject it, don't import it.
+        '@telemetry/*',
+        '@/telemetry/*',
+        '@events/*',
+        '@/events/*',
       ]),
     },
   },

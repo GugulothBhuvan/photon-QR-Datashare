@@ -6,8 +6,12 @@
  *
  * Purpose, ownership, dependency rules and public exports: see ./README.md.
  * Interfaces are defined by docs/API_SPEC.md.
- *
- * Placeholder barrel — populated from Phase 1 onwards.
  */
 
-export {};
+export {
+  createKeyValueRepository,
+  type EntityCodec,
+  type KeyValueRepositoryOptions,
+} from './keyValueRepository';
+
+export type { Repository, ValueRepository } from './repository';

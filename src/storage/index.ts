@@ -6,8 +6,8 @@
  *
  * Purpose, ownership, dependency rules and public exports: see ./README.md.
  * Secure storage requirements are defined by docs/SECURITY.md.
- *
- * Placeholder barrel — populated from Phase 1 onwards.
  */
 
-export {};
+export { createMemoryKeyValueStore } from './memoryKeyValueStore';
+
+export type { FileReference, FileStore, KeyValueStore } from './ports';
