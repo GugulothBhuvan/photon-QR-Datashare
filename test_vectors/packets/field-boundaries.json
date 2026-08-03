@@ -1,0 +1,9 @@
+{
+  "name": "field-boundaries",
+  "description": "Maximum values for the one-byte version and four-byte counter fields.",
+  "specification": "docs/PACKET_SPEC.md §5, §6, §10",
+  "protocolVersion": 255,
+  "packetType": 6,
+  "byteLength": 56,
+  "hex": "4f53ff0600000f9e8d7c6b5a49388271605f4e3d2c1b11111111222233334444555555555555fffffffeffffffff00000002ff00ed0810e6"
+}

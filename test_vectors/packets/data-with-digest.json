@@ -1,0 +1,9 @@
+{
+  "name": "data-with-digest",
+  "description": "Data packet with the optional 32-byte SHA-256 footer field present.",
+  "specification": "docs/PACKET_SPEC.md §5, §6, §10",
+  "protocolVersion": 1,
+  "packetType": 5,
+  "byteLength": 90,
+  "hex": "4f53010500000f9e8d7c6b5a49388271605f4e3d2c1b11111111222233334444555555555555000000010000000400000004deadbeef1ffafcaba5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5"
+}

@@ -1,0 +1,9 @@
+{
+  "name": "data-final-compressed",
+  "description": "Final data packet with the compression and final-packet flags set.",
+  "specification": "docs/PACKET_SPEC.md §5, §6, §10",
+  "protocolVersion": 1,
+  "packetType": 5,
+  "byteLength": 62,
+  "hex": "4f53010500050f9e8d7c6b5a49388271605f4e3d2c1b11111111222233334444555555555555000000630000006400000008000102030405060727591594"
+}

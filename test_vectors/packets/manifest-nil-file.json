@@ -1,0 +1,9 @@
+{
+  "name": "manifest-nil-file",
+  "description": "Manifest packet: belongs to no single file, so the file id is the nil UUID.",
+  "specification": "docs/PACKET_SPEC.md §5, §6, §10",
+  "protocolVersion": 1,
+  "packetType": 3,
+  "byteLength": 70,
+  "hex": "4f53010300000f9e8d7c6b5a49388271605f4e3d2c1b00000000000000000000000000000000000000000000000100000010000102030405060708090a0b0c0d0e0f1cd5177a"
+}
