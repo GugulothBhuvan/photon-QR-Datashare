@@ -1,0 +1,19 @@
+node_modules
+dist
+coverage
+.expo
+android
+ios
+package-lock.json
+expo-env.d.ts
+
+# Protocol fixtures are byte-exact and must never be reformatted.
+test_vectors/**/*.json
+test_vectors/**/*.bin
+test_vectors/**/*.hex
+
+# Specification and planning documents are authored, not generated.
+# Formatting is not enforced on them so that CI never rewrites a spec.
+docs
+planning
+AGENTS.md

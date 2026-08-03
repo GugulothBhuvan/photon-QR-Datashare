@@ -1,0 +1,22 @@
+# Normalise line endings to LF in the repository and in working trees, so that
+# Prettier's `endOfLine: lf` rule holds on every platform.
+* text=auto eol=lf
+
+# Protocol fixtures are byte-exact: never transform them.
+test_vectors/** -text -diff
+*.bin binary
+*.hex binary
+
+# Binary assets
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.ttf binary
+*.otf binary
+*.woff binary
+*.woff2 binary
+
+# Generated
+package-lock.json linguist-generated=true -diff

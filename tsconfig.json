@@ -1,0 +1,42 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true,
+    "noImplicitAny": true,
+    "noImplicitOverride": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedIndexedAccess": true,
+    "noPropertyAccessFromIndexSignature": true,
+    "exactOptionalPropertyTypes": true,
+    "useUnknownInCatchVariables": true,
+    "forceConsistentCasingInFileNames": true,
+    "verbatimModuleSyntax": false,
+    "skipLibCheck": true,
+    "types": ["jest", "node"],
+    "paths": {
+      "@/*": ["./src/*"],
+      "@core/*": ["./src/core/*"],
+      "@qr/*": ["./src/qr/*"],
+      "@camera/*": ["./src/camera/*"],
+      "@storage/*": ["./src/storage/*"],
+      "@repositories/*": ["./src/repositories/*"],
+      "@services/*": ["./src/services/*"],
+      "@controllers/*": ["./src/controllers/*"],
+      "@workers/*": ["./src/workers/*"],
+      "@hooks/*": ["./src/hooks/*"],
+      "@state/*": ["./src/state/*"],
+      "@components/*": ["./src/components/*"],
+      "@screens/*": ["./src/screens/*"],
+      "@navigation/*": ["./src/navigation/*"],
+      "@constants/*": ["./src/constants/*"],
+      "@config/*": ["./src/config/*"],
+      "@utils/*": ["./src/utils/*"],
+      "@events/*": ["./src/events/*"],
+      "@telemetry/*": ["./src/telemetry/*"],
+      "@domain/*": ["./src/types/*"]
+    }
+  },
+  "include": ["**/*.ts", "**/*.tsx", ".expo/types/**/*.ts", "expo-env.d.ts"],
+  "exclude": ["node_modules", "dist", ".expo", "coverage"]
+}
