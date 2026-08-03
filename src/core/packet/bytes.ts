@@ -10,6 +10,8 @@
  */
 import { AppError, ErrorCode } from '@core/errors';
 
+import { isUuid } from '@domain/ids';
+
 /** Field widths from the PACKET_SPEC §3 encoding table. */
 export const ByteWidth = {
   UInt8: 1,
@@ -23,15 +25,9 @@ export const UINT8_MAX = 0xff;
 export const UINT16_MAX = 0xffff;
 export const UINT32_MAX = 0xffff_ffff;
 
-/** Canonical all-zero UUID, used where a 16-byte id field has no value. */
-export const NIL_UUID = '00000000-0000-0000-0000-000000000000';
-
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-/** Whether a string is a canonical 36-character UUID. */
-export function isUuid(value: string): boolean {
-  return UUID_PATTERN.test(value);
-}
+// The UUID format rule belongs to the domain value type, which is now UUID-based
+// (@domain/ids). This module only converts between that form and 16 bytes.
+export { isUuid, NIL_UUID } from '@domain/ids';
 
 function fail(message: string, details?: Readonly<Record<string, unknown>>): never {
   throw new AppError(ErrorCode.INVALID_PACKET, message, details === undefined ? {} : { details });

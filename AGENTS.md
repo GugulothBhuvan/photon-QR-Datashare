@@ -301,6 +301,17 @@ Never change protocol behavior silently.
 
 ---
 
+## 7.1 Targeted Constant Lookup
+
+If implementation is blocked by a single protocol constant whose value is not
+defined in the currently permitted section, a targeted search for that constant
+is permitted.
+
+This exception applies only to constants and SHALL NOT be used to read future
+protocol behavior.
+
+---
+
 # 8. UI Rules
 
 React components should:

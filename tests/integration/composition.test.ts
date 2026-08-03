@@ -88,7 +88,10 @@ describe('createAppContainer', () => {
     });
 
     expect(() =>
-      bus.emit(AppEvent.TransferFailed, { transferId: transferId('t1'), code: 'TRANSFER_FAILED' }),
+      bus.emit(AppEvent.TransferFailed, {
+        transferId: transferId('aa000000-0000-4000-8000-000000000001'),
+        code: 'TRANSFER_FAILED',
+      }),
     ).not.toThrow();
 
     const logged = records.find((record) => record.message === 'Event subscriber failed');
@@ -118,15 +121,15 @@ describe('createAppContainer', () => {
       });
 
       bus.emit(AppEvent.TransferStarted, {
-        transferId: transferId('t1'),
-        sessionId: sessionId('s1'),
+        transferId: transferId('aa000000-0000-4000-8000-000000000001'),
+        sessionId: sessionId('11111111-1111-4111-8111-111111111111'),
       });
 
       const state = store.getState();
       expect(state.phase).toBe(AppPhase.Transferring);
       // Identifiers only — the protocol engine still owns the objects.
-      expect(state.activeTransferId).toBe('t1');
-      expect(state.activeSessionId).toBe('s1');
+      expect(state.activeTransferId).toBe('aa000000-0000-4000-8000-000000000001');
+      expect(state.activeSessionId).toBe('11111111-1111-4111-8111-111111111111');
     });
   });
 });

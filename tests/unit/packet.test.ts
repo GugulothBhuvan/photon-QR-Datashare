@@ -14,8 +14,8 @@ import {
 } from '@domain/packet';
 import { AppError } from '@core/errors';
 
-const session = sessionId('s-1');
-const file = fileId('f-1');
+const session = sessionId('11111111-1111-4111-8111-111111111111');
+const file = fileId('f1000000-0000-4000-8000-000000000001');
 
 const baseInput = {
   sessionId: session,
@@ -122,8 +122,8 @@ describe('isSamePosition', () => {
   });
 
   it.each([
-    ['session', { sessionId: sessionId('s-2') }],
-    ['file', { fileId: fileId('f-2') }],
+    ['session', { sessionId: sessionId('22222222-2222-4222-8222-222222222222') }],
+    ['file', { fileId: fileId('f1000000-0000-4000-8000-000000000002') }],
     ['index', { index: 1 }],
     ['type', { type: PacketType.Recovery }],
   ])('treats a different %s as a different position', (_label, change) => {

@@ -14,13 +14,13 @@ describe('createEventBus', () => {
     bus.on(AppEvent.TransferCompleted, completed);
 
     bus.emit(AppEvent.TransferStarted, {
-      transferId: transferId('t1'),
-      sessionId: sessionId('s1'),
+      transferId: transferId('aa000000-0000-4000-8000-000000000001'),
+      sessionId: sessionId('11111111-1111-4111-8111-111111111111'),
     });
 
     expect(started).toHaveBeenCalledWith({
-      transferId: transferId('t1'),
-      sessionId: sessionId('s1'),
+      transferId: transferId('aa000000-0000-4000-8000-000000000001'),
+      sessionId: sessionId('11111111-1111-4111-8111-111111111111'),
     });
     expect(completed).not.toHaveBeenCalled();
   });
@@ -33,7 +33,9 @@ describe('createEventBus', () => {
     bus.on(AppEvent.SessionCreated, () => order.push('second'));
     bus.on(AppEvent.SessionCreated, () => order.push('third'));
 
-    bus.emit(AppEvent.SessionCreated, { sessionId: sessionId('s1') });
+    bus.emit(AppEvent.SessionCreated, {
+      sessionId: sessionId('11111111-1111-4111-8111-111111111111'),
+    });
 
     expect(order).toEqual(['first', 'second', 'third']);
   });
@@ -53,7 +55,10 @@ describe('createEventBus', () => {
       seen = payload;
     });
 
-    bus.emit(AppEvent.PacketGenerated, { sessionId: sessionId('s1'), sequence: 7 });
+    bus.emit(AppEvent.PacketGenerated, {
+      sessionId: sessionId('11111111-1111-4111-8111-111111111111'),
+      sequence: 7,
+    });
 
     // Assertions live outside the subscribers: the bus isolates subscriber
     // throws, so a failure raised inside one would be swallowed.
@@ -66,11 +71,15 @@ describe('createEventBus', () => {
     const handler = jest.fn();
 
     const unsubscribe = bus.on(AppEvent.TransferPaused, handler);
-    bus.emit(AppEvent.TransferPaused, { transferId: transferId('t1') });
+    bus.emit(AppEvent.TransferPaused, {
+      transferId: transferId('aa000000-0000-4000-8000-000000000001'),
+    });
 
     unsubscribe();
     unsubscribe();
-    bus.emit(AppEvent.TransferPaused, { transferId: transferId('t1') });
+    bus.emit(AppEvent.TransferPaused, {
+      transferId: transferId('aa000000-0000-4000-8000-000000000001'),
+    });
 
     expect(handler).toHaveBeenCalledTimes(1);
     expect(bus.listenerCount(AppEvent.TransferPaused)).toBe(0);
@@ -81,8 +90,12 @@ describe('createEventBus', () => {
     const handler = jest.fn();
 
     bus.once(AppEvent.TransferCompleted, handler);
-    bus.emit(AppEvent.TransferCompleted, { transferId: transferId('t1') });
-    bus.emit(AppEvent.TransferCompleted, { transferId: transferId('t1') });
+    bus.emit(AppEvent.TransferCompleted, {
+      transferId: transferId('aa000000-0000-4000-8000-000000000001'),
+    });
+    bus.emit(AppEvent.TransferCompleted, {
+      transferId: transferId('aa000000-0000-4000-8000-000000000001'),
+    });
 
     expect(handler).toHaveBeenCalledTimes(1);
     expect(bus.listenerCount(AppEvent.TransferCompleted)).toBe(0);
@@ -96,10 +109,14 @@ describe('createEventBus', () => {
       bus.on(AppEvent.SessionCreated, late);
     });
 
-    bus.emit(AppEvent.SessionCreated, { sessionId: sessionId('s1') });
+    bus.emit(AppEvent.SessionCreated, {
+      sessionId: sessionId('11111111-1111-4111-8111-111111111111'),
+    });
     expect(late).not.toHaveBeenCalled();
 
-    bus.emit(AppEvent.SessionCreated, { sessionId: sessionId('s2') });
+    bus.emit(AppEvent.SessionCreated, {
+      sessionId: sessionId('22222222-2222-4222-8222-222222222222'),
+    });
     expect(late).toHaveBeenCalledTimes(1);
   });
 
@@ -114,7 +131,10 @@ describe('createEventBus', () => {
     bus.on(AppEvent.TransferFailed, survivor);
 
     expect(() => {
-      bus.emit(AppEvent.TransferFailed, { transferId: transferId('t1'), code: 'TRANSFER_FAILED' });
+      bus.emit(AppEvent.TransferFailed, {
+        transferId: transferId('aa000000-0000-4000-8000-000000000001'),
+        code: 'TRANSFER_FAILED',
+      });
     }).not.toThrow();
 
     expect(survivor).toHaveBeenCalledTimes(1);
@@ -124,7 +144,11 @@ describe('createEventBus', () => {
 
   it('emitting with no subscribers is a no-op', () => {
     const bus = createEventBus();
-    expect(() => bus.emit(AppEvent.SessionExpired, { sessionId: sessionId('s1') })).not.toThrow();
+    expect(() =>
+      bus.emit(AppEvent.SessionExpired, {
+        sessionId: sessionId('11111111-1111-4111-8111-111111111111'),
+      }),
+    ).not.toThrow();
   });
 
   it('clear removes every subscription', () => {
@@ -133,7 +157,9 @@ describe('createEventBus', () => {
 
     bus.on(AppEvent.SessionCreated, handler);
     bus.clear();
-    bus.emit(AppEvent.SessionCreated, { sessionId: sessionId('s1') });
+    bus.emit(AppEvent.SessionCreated, {
+      sessionId: sessionId('11111111-1111-4111-8111-111111111111'),
+    });
 
     expect(handler).not.toHaveBeenCalled();
   });

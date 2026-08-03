@@ -21,21 +21,21 @@ const configuration: ManifestConfiguration = {
 };
 
 const fileA = createFileMetadata({
-  id: fileId('f-1'),
+  id: fileId('f1000000-0000-4000-8000-000000000001'),
   name: 'a.jpg',
   size: 1000,
   hash: 'hash-a',
 });
 
 const fileB = createFileMetadata({
-  id: fileId('f-2'),
+  id: fileId('f1000000-0000-4000-8000-000000000002'),
   name: 'b.pdf',
   size: 2500,
   hash: 'hash-b',
 });
 
 const baseInput = {
-  sessionId: sessionId('s-1'),
+  sessionId: sessionId('11111111-1111-4111-8111-111111111111'),
   protocolVersion: protocolVersion(1),
   createdAt: 1_700_000_000_000,
   configuration,
@@ -139,11 +139,11 @@ describe('createManifest', () => {
 
     const named = createManifest({
       ...baseInput,
-      transferId: transferId('t-1'),
+      transferId: transferId('aa000000-0000-4000-8000-000000000001'),
       name: 'Holiday photos',
     });
 
-    expect(named.transferId).toBe('t-1');
+    expect(named.transferId).toBe('aa000000-0000-4000-8000-000000000001');
     expect(named.name).toBe('Holiday photos');
   });
 
@@ -166,13 +166,15 @@ describe('findEntry', () => {
   });
 
   it('returns undefined for an unknown file', () => {
-    expect(findEntry(createManifest(baseInput), fileId('nope'))).toBeUndefined();
+    expect(
+      findEntry(createManifest(baseInput), fileId('f1000000-0000-4000-8000-00000000000e')),
+    ).toBeUndefined();
   });
 });
 
 describe('manifestEquals', () => {
   it.each([
-    ['sessionId', { sessionId: sessionId('s-2') }],
+    ['sessionId', { sessionId: sessionId('22222222-2222-4222-8222-222222222222') }],
     ['protocolVersion', { protocolVersion: protocolVersion(2) }],
     ['createdAt', { createdAt: 1 }],
     ['name', { name: 'other' }],

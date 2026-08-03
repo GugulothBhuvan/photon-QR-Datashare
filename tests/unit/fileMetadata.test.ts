@@ -6,7 +6,7 @@ import { fileId } from '@domain/ids';
 import { AppError } from '@core/errors';
 
 const baseInput = {
-  id: fileId('f-1'),
+  id: fileId('f1000000-0000-4000-8000-000000000001'),
   name: 'holiday.jpg',
   extension: 'jpg',
   mimeType: 'image/jpeg',
@@ -28,7 +28,12 @@ describe('createFileMetadata', () => {
   });
 
   it('defaults an unknown MIME type to the generic binary type', () => {
-    const file = createFileMetadata({ id: fileId('f-1'), name: 'blob', size: 1, hash: 'h' });
+    const file = createFileMetadata({
+      id: fileId('f1000000-0000-4000-8000-000000000001'),
+      name: 'blob',
+      size: 1,
+      hash: 'h',
+    });
 
     expect(file.mimeType).toBe('application/octet-stream');
     expect(file.extension).toBe('');
@@ -68,7 +73,7 @@ describe('fileMetadataEquals', () => {
   });
 
   it.each([
-    ['id', { id: fileId('f-2') }],
+    ['id', { id: fileId('f1000000-0000-4000-8000-000000000002') }],
     ['name', { name: 'other.jpg' }],
     ['extension', { extension: 'png' }],
     ['mimeType', { mimeType: 'image/png' }],

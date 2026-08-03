@@ -14,10 +14,13 @@ import {
 import { AppError } from '@core/errors';
 
 const baseInput = {
-  id: transferId('t-1'),
-  sessionId: sessionId('s-1'),
+  id: transferId('aa000000-0000-4000-8000-000000000001'),
+  sessionId: sessionId('11111111-1111-4111-8111-111111111111'),
   direction: TransferDirection.Send,
-  fileIds: [fileId('f-1'), fileId('f-2')],
+  fileIds: [
+    fileId('f1000000-0000-4000-8000-000000000001'),
+    fileId('f1000000-0000-4000-8000-000000000002'),
+  ],
   totalPacketCount: 7,
   startedAt: 1_700_000_000_000,
 };
@@ -26,13 +29,13 @@ describe('createTransfer', () => {
   it('keeps every supplied field', () => {
     const transfer = createTransfer(baseInput);
 
-    expect(transfer.id).toBe('t-1');
+    expect(transfer.id).toBe('aa000000-0000-4000-8000-000000000001');
     expect(transfer.direction).toBe(TransferDirection.Send);
     expect(transfer.totalPacketCount).toBe(7);
   });
 
   it('occurs within exactly one session (§8.1)', () => {
-    expect(createTransfer(baseInput).sessionId).toBe('s-1');
+    expect(createTransfer(baseInput).sessionId).toBe('11111111-1111-4111-8111-111111111111');
   });
 
   it('is frozen, file list included', () => {
@@ -43,10 +46,10 @@ describe('createTransfer', () => {
   });
 
   it('copies the file list so the caller cannot alter it afterwards', () => {
-    const fileIds = [fileId('f-1')];
+    const fileIds = [fileId('f1000000-0000-4000-8000-000000000001')];
     const transfer = createTransfer({ ...baseInput, fileIds });
 
-    fileIds.push(fileId('f-9'));
+    fileIds.push(fileId('f1000000-0000-4000-8000-000000000009'));
 
     expect(transfer.fileIds).toHaveLength(1);
   });
@@ -57,7 +60,15 @@ describe('createTransfer', () => {
 
   it.each([
     ['no files', { fileIds: [] }],
-    ['duplicate files', { fileIds: [fileId('f-1'), fileId('f-1')] }],
+    [
+      'duplicate files',
+      {
+        fileIds: [
+          fileId('f1000000-0000-4000-8000-000000000001'),
+          fileId('f1000000-0000-4000-8000-000000000001'),
+        ],
+      },
+    ],
     ['a negative packet count', { totalPacketCount: -1 }],
     ['a fractional packet count', { totalPacketCount: 1.5 }],
     ['a negative start time', { startedAt: -1 }],
@@ -124,12 +135,12 @@ describe('equality helpers', () => {
   });
 
   it.each([
-    ['id', { id: transferId('t-2') }],
-    ['sessionId', { sessionId: sessionId('s-2') }],
+    ['id', { id: transferId('aa000000-0000-4000-8000-000000000002') }],
+    ['sessionId', { sessionId: sessionId('22222222-2222-4222-8222-222222222222') }],
     ['direction', { direction: TransferDirection.Receive }],
     ['totalPacketCount', { totalPacketCount: 8 }],
     ['startedAt', { startedAt: 1 }],
-    ['fileIds', { fileIds: [fileId('f-1')] }],
+    ['fileIds', { fileIds: [fileId('f1000000-0000-4000-8000-000000000001')] }],
   ])('detect a difference in %s', (_label, change) => {
     expect(
       transferEquals(createTransfer(baseInput), createTransfer({ ...baseInput, ...change })),

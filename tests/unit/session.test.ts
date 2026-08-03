@@ -13,7 +13,7 @@ import {
 import { AppError } from '@core/errors';
 
 const baseInput = {
-  id: sessionId('s-1'),
+  id: sessionId('11111111-1111-4111-8111-111111111111'),
   protocolVersion: protocolVersion(1),
   createdAt: 1_700_000_000_000,
 };
@@ -116,7 +116,7 @@ describe('sessionEquals', () => {
   });
 
   it.each([
-    ['id', { id: sessionId('s-2') }],
+    ['id', { id: sessionId('22222222-2222-4222-8222-222222222222') }],
     ['state', { state: SessionState.Active }],
     ['createdAt', { createdAt: 1 }],
     ['protocolVersion', { protocolVersion: protocolVersion(2) }],

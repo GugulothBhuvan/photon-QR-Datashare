@@ -357,16 +357,21 @@ describe('wrapping the Phase 2 domain model', () => {
     expect(wire.header.packetType).toBe(PacketTypeId.Manifest);
   });
 
-  it('rejects a domain identifier that is not a UUID', () => {
-    // The domain model admits any non-empty string; the wire format gives the
-    // field 16 bytes. The boundary is enforced here, not by widening the model.
+  it('cannot be handed an identifier the wire format could not carry', () => {
+    // The domain model is UUID-based, so a non-encodable id is rejected when
+    // it is constructed rather than at serialization time. There is no path by
+    // which toWirePacket receives one.
+    expect(() => sessionId('session-1')).toThrow();
+  });
+
+  it('rejects a protocol version wider than the one-byte header field', () => {
     const domain = createPacket({
-      sessionId: sessionId('session-1'),
+      sessionId: sessionId(SESSION),
       fileId: fileId(FILE),
       index: 0,
       payload,
     });
 
-    expect(() => toWirePacket(domain, { protocolVersion: 1, totalPackets: 1 })).toThrow();
+    expect(() => toWirePacket(domain, { protocolVersion: 256, totalPackets: 1 })).toThrow();
   });
 });
