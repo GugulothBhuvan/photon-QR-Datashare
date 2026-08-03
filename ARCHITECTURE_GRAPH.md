@@ -69,6 +69,14 @@ Note that `core` reaches `types`, `utils` and `constants` but **not**
 domain models and utilities, and a logger or a bus is a side-effecting
 collaborator: the core receives one as an argument if it needs one at all.
 
+**`core/errors` is the one module every layer may reach.** A standardized
+error code is part of the contract each layer answers with
+(`docs/API_SPEC.md` §12), so the error model sits at the bottom of the graph
+and utilities depend on Core rather than the reverse. It imports nothing, which
+is what keeps it from creating a cycle. Adapters are otherwise barred from
+`core`; `eslint.config.js` encodes the exception as a single negated pattern,
+so `@core/errors` resolves and every other core module still fails the build.
+
 Plain-text equivalent:
 
 ```text
@@ -148,8 +156,8 @@ graph LR
 | `src/storage`, `src/camera`, `src/qr`         | Adapters         | Platform APIs, shared                         | Core, services, controllers, repositories, UI   |
 | `src/state`, `src/events`                     | Cross-cutting    | Domain types                                  | Screens, navigation, adapters                   |
 | `src/config`                                  | Composition root | Any layer (wiring only)                       | —                                               |
-| `src/types`                                   | Domain models    | `@utils/errors` only                          | Every other module                              |
-| `src/utils`, `src/constants`, `src/telemetry` | Shared           | Nothing (leaf modules)                        | Every other module                              |
+| `src/types`                                   | Domain models    | `@core/errors` only                           | Every other module                              |
+| `src/utils`, `src/constants`, `src/telemetry` | Shared           | `@core/errors` only                           | Every other module                              |
 
 The eight major layers each carry a `README.md` stating the same rules in
 detail; each `index.ts` points to its README.

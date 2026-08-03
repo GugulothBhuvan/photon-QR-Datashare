@@ -12,7 +12,7 @@ import {
   packetEquals,
   PacketType,
 } from '@domain/packet';
-import { AppError } from '@utils/errors';
+import { AppError } from '@core/errors';
 
 const session = sessionId('s-1');
 const file = fileId('f-1');

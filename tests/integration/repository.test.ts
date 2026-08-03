@@ -7,7 +7,7 @@
  */
 import { createKeyValueRepository, type EntityCodec } from '@repositories/index';
 import { createMemoryKeyValueStore } from '@storage/index';
-import { AppError, ErrorCode } from '@utils/errors';
+import { AppError, ErrorCode } from '@core/errors';
 
 interface HistoryEntry {
   readonly id: string;

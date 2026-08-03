@@ -11,7 +11,7 @@ import {
   transferEquals,
   TransferDirection,
 } from '@domain/transfer';
-import { AppError } from '@utils/errors';
+import { AppError } from '@core/errors';
 
 const baseInput = {
   id: transferId('t-1'),

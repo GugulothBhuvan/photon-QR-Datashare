@@ -16,7 +16,7 @@
  * value, not two.
  */
 import { PerformanceMode, QRSpeedPreference, Theme, type Settings } from '@domain/settings';
-import { AppError, ErrorCode } from '@utils/errors';
+import { AppError, ErrorCode } from '@core/errors';
 
 export {
   PerformanceMode,

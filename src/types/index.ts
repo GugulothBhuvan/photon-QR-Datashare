@@ -5,7 +5,7 @@
  * FileMetadata and Settings — as immutable value objects.
  *
  * May depend on:
- *   - The shared error model (@utils/errors), so an invalid value cannot be
+ *   - The shared error model (@core/errors), so an invalid value cannot be
  *     constructed and failures use standardized codes
  *
  * Must NOT depend on:

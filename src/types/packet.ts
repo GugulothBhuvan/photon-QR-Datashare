@@ -12,7 +12,7 @@
  * Packets are immutable (§3.12: payload contents remain unchanged throughout
  * transmission).
  */
-import { AppError, ErrorCode } from '@utils/errors';
+import { AppError, ErrorCode } from '@core/errors';
 
 import { type FileId, type SessionId } from './ids';
 

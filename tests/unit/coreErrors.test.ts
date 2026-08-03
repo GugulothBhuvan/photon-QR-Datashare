@@ -1,7 +1,7 @@
 /**
  * Error model — docs/API_SPEC.md §12, docs/ARCHITECTURE.md §6.11.
  */
-import { AppError, ErrorCategory, ErrorCode, toUserMessage } from '@utils/errors';
+import { AppError, ErrorCategory, ErrorCode, toUserMessage } from '@core/errors';
 
 describe('AppError', () => {
   it('classifies each code with a default category', () => {

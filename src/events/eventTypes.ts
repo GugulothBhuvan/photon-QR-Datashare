@@ -60,7 +60,7 @@ export interface TransferCompletedPayload {
 
 export interface TransferFailedPayload {
   readonly transferId: TransferId;
-  /** Standardized code from `@utils/errors`. Never a platform exception. */
+  /** Standardized code from `@core/errors`. Never a platform exception. */
   readonly code: string;
 }
 

@@ -11,7 +11,7 @@
  * The protocol treats every file as an opaque byte sequence and SHALL NOT
  * inspect its contents (§3.8); nothing here interprets the file.
  */
-import { AppError, ErrorCode } from '@utils/errors';
+import { AppError, ErrorCode } from '@core/errors';
 
 import { type FileId } from './ids';
 

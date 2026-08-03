@@ -8,7 +8,7 @@
  * record that no longer parses is a domain decision — this module never
  * guesses at a shape.
  */
-import { AppError, ErrorCode } from '@utils/errors';
+import { AppError, ErrorCode } from '@core/errors';
 
 import type { KeyValueStore } from '@storage/ports';
 

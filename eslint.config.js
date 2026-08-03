@@ -25,6 +25,16 @@ const UI_LAYER = [
 const CONTROLLER_LAYER = ['@controllers/*', '@/controllers/*'];
 const SERVICE_LAYER = ['@services/*', '@/services/*'];
 const CORE_LAYER = ['@core/*', '@/core/*'];
+
+/**
+ * The core layer minus its error model.
+ *
+ * Core owns the standardized errors (docs/API_SPEC.md §12), and adapters are
+ * required to throw them rather than leaking platform exceptions. Everything
+ * else in core stays out of reach. Negations override earlier patterns, so the
+ * order here matters.
+ */
+const CORE_LAYER_EXCEPT_ERRORS = ['@core/*', '!@core/errors', '@/core/*', '!@/core/errors'];
 const REPOSITORY_LAYER = ['@repositories/*', '@/repositories/*'];
 const ADAPTER_LAYER = ['@storage/*', '@camera/*', '@qr/*', '@/storage/*', '@/camera/*', '@/qr/*'];
 
@@ -184,8 +194,8 @@ module.exports = [
         ...UI_LAYER,
         ...CONTROLLER_LAYER,
         ...SERVICE_LAYER,
-        ...CORE_LAYER,
         ...REPOSITORY_LAYER,
+        ...CORE_LAYER_EXCEPT_ERRORS,
       ]),
     },
   },

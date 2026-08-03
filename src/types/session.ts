@@ -14,7 +14,7 @@
  * lifecycle, and the state machine that walks it belongs to the protocol
  * engine. `withState` produces a new value and enforces no ordering.
  */
-import { AppError, ErrorCode } from '@utils/errors';
+import { AppError, ErrorCode } from '@core/errors';
 
 import { type ProtocolVersion, type SessionId } from './ids';
 

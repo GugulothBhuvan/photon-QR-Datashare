@@ -14,7 +14,7 @@
  * first place. Validating a manifest that arrived from another device is a
  * separate, receiver-side concern (§10.7) belonging to a later phase.
  */
-import { AppError, ErrorCode } from '@utils/errors';
+import { AppError, ErrorCode } from '@core/errors';
 
 import { type FileMetadata } from './fileMetadata';
 import { type FileId, type ProtocolVersion, type SessionId, type TransferId } from './ids';

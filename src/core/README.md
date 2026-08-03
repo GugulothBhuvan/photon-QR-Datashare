@@ -26,6 +26,16 @@ updates the specification first, then this layer, then its tests.
 - `@utils/*` — pure helpers
 - `@constants/*` — shared constants
 
+### One exception, in the other direction
+
+`@core/errors` is the standardized error model (`docs/API_SPEC.md` §12), and
+**every layer may import it** — including adapters, which are otherwise barred
+from `core`. An error code is part of the contract each layer answers with, so
+it belongs at the bottom of the graph rather than beside the utilities.
+
+It imports nothing, so it cannot participate in a cycle. `eslint.config.js`
+allows `@core/errors` and nothing else from `core` in the adapter layers.
+
 ## Forbidden dependencies
 
 - React, React Native, Expo — any platform API
@@ -37,9 +47,15 @@ injected interface. `npm run lint` enforces every rule above.
 
 ## Public exports
 
-None yet — Phase 0 left a placeholder barrel.
+| Export                       | Kind                                                       |
+| ---------------------------- | ---------------------------------------------------------- |
+| `AppError`                   | The only error type that crosses a module boundary         |
+| `ErrorCode`, `ErrorCategory` | Standardized codes and categories (`docs/API_SPEC.md` §12) |
+| `toUserMessage`              | Reduces any thrown value to something safe to display      |
 
-Planned surface, from `planning/TASK_GRAPH.md`. Authoritative signatures live in
+### Planned
+
+From `planning/TASK_GRAPH.md`. Authoritative signatures live in
 `docs/API_SPEC.md`; this table is a map, not a contract.
 
 | Export                           | Task             | Specification           |

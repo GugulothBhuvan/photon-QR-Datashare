@@ -10,7 +10,7 @@
  * Every identifier is created through a factory that enforces its invariant, so
  * an identifier that exists is an identifier that is valid.
  */
-import { AppError, ErrorCode } from '@utils/errors';
+import { AppError, ErrorCode } from '@core/errors';
 
 declare const brand: unique symbol;
 

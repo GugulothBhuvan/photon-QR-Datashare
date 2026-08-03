@@ -9,7 +9,7 @@
  * within the publishing call. That keeps behaviour deterministic
  * (docs/API_SPEC.md §2), which asynchronous delivery would not.
  */
-import { AppError, ErrorCode } from '@utils/errors';
+import { AppError, ErrorCode } from '@core/errors';
 
 import type { AppEventMap } from './eventTypes';
 

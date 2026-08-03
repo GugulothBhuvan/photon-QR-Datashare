@@ -10,7 +10,7 @@ import {
   withConfig,
   type AppConfig,
 } from '@config/appConfig';
-import { AppError, ErrorCode } from '@utils/errors';
+import { AppError, ErrorCode } from '@core/errors';
 
 describe('defaultAppConfig', () => {
   it('is immutable', () => {

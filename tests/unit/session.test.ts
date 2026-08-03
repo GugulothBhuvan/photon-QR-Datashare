@@ -10,7 +10,7 @@ import {
   SessionState,
   withState,
 } from '@domain/session';
-import { AppError } from '@utils/errors';
+import { AppError } from '@core/errors';
 
 const baseInput = {
   id: sessionId('s-1'),

@@ -3,7 +3,7 @@
  */
 import { createFileMetadata, fileMetadataEquals } from '@domain/fileMetadata';
 import { fileId } from '@domain/ids';
-import { AppError } from '@utils/errors';
+import { AppError } from '@core/errors';
 
 const baseInput = {
   id: fileId('f-1'),

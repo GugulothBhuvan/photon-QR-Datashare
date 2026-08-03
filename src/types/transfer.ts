@@ -10,7 +10,7 @@
  * behaviour. This model carries a transfer's identity and shape only. Lifecycle
  * arrives with the protocol engine.
  */
-import { AppError, ErrorCode } from '@utils/errors';
+import { AppError, ErrorCode } from '@core/errors';
 
 import { type FileId, type SessionId, type TransferId } from './ids';
 

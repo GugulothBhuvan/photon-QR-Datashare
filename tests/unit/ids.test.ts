@@ -2,7 +2,7 @@
  * Identifiers — PROTOCOL_SPEC §3.4, §3.29, §8.5, §10.15.5.
  */
 import { fileId, protocolVersion, sessionId, transferId } from '@domain/ids';
-import { AppError } from '@utils/errors';
+import { AppError } from '@core/errors';
 
 describe('identifier factories', () => {
   it('carry their value through unchanged', () => {

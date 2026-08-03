@@ -8,7 +8,7 @@ import { sessionId, transferId } from '@domain/index';
 import { AppEvent } from '@events/index';
 import { AppPhase, initialAppState } from '@state/index';
 import { LogLevel, type LogRecord } from '@telemetry/index';
-import { AppError, ErrorCode } from '@utils/errors';
+import { AppError, ErrorCode } from '@core/errors';
 import {
   createAppContainer,
   defaultAppConfig,

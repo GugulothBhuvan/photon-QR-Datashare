@@ -11,7 +11,7 @@ import {
   NONE,
   type ManifestConfiguration,
 } from '@domain/manifest';
-import { AppError } from '@utils/errors';
+import { AppError } from '@core/errors';
 
 const configuration: ManifestConfiguration = {
   packetSize: 512,

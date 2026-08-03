@@ -1,7 +1,7 @@
 /**
  * Dependency injection container (ARC-001) — planning/DEPENDENCIES.md §8.
  */
-import { AppError, ErrorCode } from '@utils/errors';
+import { AppError, ErrorCode } from '@core/errors';
 import { createContainer, createToken } from '@config/container';
 
 interface Greeter {

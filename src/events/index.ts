@@ -6,7 +6,7 @@
  *
  * May depend on:
  *   - Domain models (@domain/*)
- *   - Shared error model (@utils/errors)
+ *   - Shared error model (@core/errors)
  *
  * Must NOT depend on:
  *   - UI

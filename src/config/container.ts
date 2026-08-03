@@ -9,7 +9,7 @@
  * unchanged under Hermes. A token is a typed key, so a mis-wired graph is a
  * compile error rather than a runtime surprise.
  */
-import { AppError, ErrorCode } from '@utils/errors';
+import { AppError, ErrorCode } from '@core/errors';
 
 /**
  * A typed key for a dependency.
