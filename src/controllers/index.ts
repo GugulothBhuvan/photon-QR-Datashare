@@ -1,19 +1,13 @@
 /**
  * controllers/ — Controller layer
  *
- * Owns: Coordination between UI intent and services. Contains orchestration, never business rules.
+ * Coordination between UI intent and services. Sequences calls and maps
+ * results onto state; contains no business rules.
  *
- * May depend on:
- *   - Services (@services/*)
- *   - State (@state/*)
- *   - Event bus (@events/*)
+ * Purpose, ownership, dependency rules and public exports: see ./README.md.
+ * Interfaces are defined by docs/API_SPEC.md.
  *
- * Must NOT depend on:
- *   - React components
- *   - Platform APIs
- *
- * Authority: planning/DEPENDENCIES.md and docs/ARCHITECTURE.md.
- * Placeholder barrel — populated from Phase 1 onwards.
+ * Placeholder barrel — populated from Phase 8 onwards.
  */
 
 export {};

@@ -1,20 +1,13 @@
 /**
- * camera/ — Adapter layer
+ * camera/ — Adapter layer — optical transport, receive side
  *
- * Owns: Camera capture and frame acquisition behind a platform-neutral interface.
+ * Camera capture, QR detection and decoding. Ownership stops at the bytes;
+ * it never parses packets.
  *
- * May depend on:
- *   - Platform camera APIs
- *   - Domain models (@domain/*)
+ * Purpose, ownership, dependency rules and public exports: see ./README.md.
+ * Behaviour is defined by docs/QR_SPEC.md.
  *
- * Must NOT depend on:
- *   - Packet serialization
- *   - Core protocol
- *   - Services
- *   - UI
- *
- * Authority: planning/DEPENDENCIES.md and docs/ARCHITECTURE.md.
- * Placeholder barrel — populated from Phase 1 onwards.
+ * Placeholder barrel — populated from Phase 6 onwards.
  */
 
 export {};

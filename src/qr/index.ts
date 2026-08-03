@@ -1,21 +1,13 @@
 /**
- * qr/ — Adapter layer
+ * qr/ — Adapter layer — optical transport, send side
  *
- * Owns: Optical transport: QR encoding, rendering payload preparation and frame scheduling.
+ * Encodes protocol packets into displayable frames and paces them. Treats
+ * payload bytes as opaque.
  *
- * May depend on:
- *   - Domain models (@domain/*)
- *   - Utilities (@utils/*)
- *   - Third-party QR library
+ * Purpose, ownership, dependency rules and public exports: see ./README.md.
+ * Behaviour is defined by docs/QR_SPEC.md.
  *
- * Must NOT depend on:
- *   - Storage
- *   - UI
- *   - Controllers
- *   - Repositories
- *
- * Authority: planning/DEPENDENCIES.md and docs/ARCHITECTURE.md.
- * Placeholder barrel — populated from Phase 1 onwards.
+ * Placeholder barrel — populated from Phase 5 onwards.
  */
 
 export {};

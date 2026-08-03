@@ -1,22 +1,13 @@
 /**
  * components/ — UI layer
  *
- * Owns: Reusable presentational components. Render state, dispatch actions, nothing more.
+ * Reusable presentational components. Render UI, display state, dispatch
+ * actions — nothing else (AGENTS.md §8).
  *
- * May depend on:
- *   - Hooks (@hooks/*)
- *   - State (@state/*)
- *   - Constants (@constants/*)
+ * Purpose, ownership, dependency rules and public exports: see ./README.md.
+ * Screens are defined by docs/UI_SPEC.md.
  *
- * Must NOT depend on:
- *   - Protocol logic
- *   - Packet layer
- *   - QR encoder
- *   - Storage
- *   - Camera implementation
- *
- * Authority: planning/DEPENDENCIES.md and docs/ARCHITECTURE.md.
- * Placeholder barrel — populated from Phase 1 onwards.
+ * Placeholder barrel — populated from Phase 8 onwards.
  */
 
 export {};

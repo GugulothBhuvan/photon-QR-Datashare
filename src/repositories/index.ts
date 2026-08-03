@@ -1,19 +1,12 @@
 /**
  * repositories/ — Repository layer
  *
- * Owns: Persistence of sessions, packets, transfers and settings. Owns all read/write policy.
+ * Persistence for sessions, packets, transfers and settings. Exposes domain
+ * types, never storage primitives.
  *
- * May depend on:
- *   - Storage adapters (@storage/*)
- *   - Domain models (@domain/*)
- *   - Utilities (@utils/*)
+ * Purpose, ownership, dependency rules and public exports: see ./README.md.
+ * Interfaces are defined by docs/API_SPEC.md.
  *
- * Must NOT depend on:
- *   - UI
- *   - Controllers
- *   - Services
- *
- * Authority: planning/DEPENDENCIES.md and docs/ARCHITECTURE.md.
  * Placeholder barrel — populated from Phase 1 onwards.
  */
 

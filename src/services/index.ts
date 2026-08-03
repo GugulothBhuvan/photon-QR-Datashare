@@ -1,21 +1,12 @@
 /**
  * services/ — Service layer
  *
- * Owns: Business behaviour composed from the core protocol and repositories.
+ * Business behaviour composed from the core protocol, repositories and
+ * adapters. Owns use cases, not protocol rules.
  *
- * May depend on:
- *   - Core protocol (@core/*)
- *   - Repositories (@repositories/*)
- *   - Utilities (@utils/*)
- *   - Event bus (@events/*)
+ * Purpose, ownership, dependency rules and public exports: see ./README.md.
+ * Interfaces are defined by docs/API_SPEC.md.
  *
- * Must NOT depend on:
- *   - Screens
- *   - Navigation
- *   - UI components
- *   - Controllers
- *
- * Authority: planning/DEPENDENCIES.md and docs/ARCHITECTURE.md.
  * Placeholder barrel — populated from Phase 1 onwards.
  */
 
