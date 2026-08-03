@@ -29,9 +29,13 @@ export const AppEvent = {
 
 export type AppEvent = (typeof AppEvent)[keyof typeof AppEvent];
 
-/** Opaque identifiers. Concrete branded types arrive with the domain models in Phase 2. */
-export type SessionId = string;
-export type TransferId = string;
+/**
+ * Identifiers come from the domain layer (MOD, Phase 2). They are re-exported
+ * so event consumers need only one import, but there is a single definition.
+ */
+export type { SessionId, TransferId } from '@domain/ids';
+
+import type { SessionId, TransferId } from '@domain/ids';
 
 export interface SessionCreatedPayload {
   readonly sessionId: SessionId;

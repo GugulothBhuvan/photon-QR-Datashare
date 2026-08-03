@@ -136,19 +136,20 @@ graph LR
 
 ## 5. Directory map
 
-| Directory                                                  | Layer            | May depend on                                 | Must NOT depend on                              |
-| ---------------------------------------------------------- | ---------------- | --------------------------------------------- | ----------------------------------------------- |
-| `app/`, `src/screens`, `src/components`                    | UI               | Controllers, hooks, state, navigation, shared | Core, services, repositories, adapters, workers |
-| `src/hooks`                                                | UI               | Controllers, state, React                     | Core, repositories, adapters                    |
-| `src/navigation`                                           | UI               | Expo Router, constants                        | Services, core, repositories                    |
-| `src/controllers`                                          | Controllers      | Services, state, events                       | React, React Native, Expo, UI                   |
-| `src/services`, `src/workers`                              | Services         | Core, repositories, events, shared            | UI, controllers, React Native                   |
-| `src/core`                                                 | Core Protocol    | Domain types, utils, constants                | Everything else, including all platform APIs    |
-| `src/repositories`                                         | Repositories     | Storage adapters, domain types                | UI, controllers, services, React Native         |
-| `src/storage`, `src/camera`, `src/qr`                      | Adapters         | Platform APIs, shared                         | Core, services, controllers, repositories, UI   |
-| `src/state`, `src/events`                                  | Cross-cutting    | Domain types                                  | Screens, navigation, adapters                   |
-| `src/config`                                               | Composition root | Any layer (wiring only)                       | —                                               |
-| `src/types`, `src/utils`, `src/constants`, `src/telemetry` | Shared           | Nothing (leaf modules)                        | Every other module                              |
+| Directory                                     | Layer            | May depend on                                 | Must NOT depend on                              |
+| --------------------------------------------- | ---------------- | --------------------------------------------- | ----------------------------------------------- |
+| `app/`, `src/screens`, `src/components`       | UI               | Controllers, hooks, state, navigation, shared | Core, services, repositories, adapters, workers |
+| `src/hooks`                                   | UI               | Controllers, state, React                     | Core, repositories, adapters                    |
+| `src/navigation`                              | UI               | Expo Router, constants                        | Services, core, repositories                    |
+| `src/controllers`                             | Controllers      | Services, state, events                       | React, React Native, Expo, UI                   |
+| `src/services`, `src/workers`                 | Services         | Core, repositories, events, shared            | UI, controllers, React Native                   |
+| `src/core`                                    | Core Protocol    | Domain types, utils, constants                | Everything else, including all platform APIs    |
+| `src/repositories`                            | Repositories     | Storage adapters, domain types                | UI, controllers, services, React Native         |
+| `src/storage`, `src/camera`, `src/qr`         | Adapters         | Platform APIs, shared                         | Core, services, controllers, repositories, UI   |
+| `src/state`, `src/events`                     | Cross-cutting    | Domain types                                  | Screens, navigation, adapters                   |
+| `src/config`                                  | Composition root | Any layer (wiring only)                       | —                                               |
+| `src/types`                                   | Domain models    | `@utils/errors` only                          | Every other module                              |
+| `src/utils`, `src/constants`, `src/telemetry` | Shared           | Nothing (leaf modules)                        | Every other module                              |
 
 The eight major layers each carry a `README.md` stating the same rules in
 detail; each `index.ts` points to its README.

@@ -8,7 +8,9 @@
  * or transfer objects — application state *references* protocol state, and the
  * protocol engine remains its single owner.
  */
-import type { SessionId, TransferId } from '@events/eventTypes';
+import type { SessionId, TransferId, TransferProgress } from '@domain/index';
+
+export type { TransferProgress } from '@domain/index';
 
 /** Coarse lifecycle phase, from docs/ARCHITECTURE.md §6.13. */
 export const AppPhase = {
@@ -19,14 +21,6 @@ export const AppPhase = {
 } as const;
 
 export type AppPhase = (typeof AppPhase)[keyof typeof AppPhase];
-
-/** Progress of the active transfer. Owned by the protocol engine, mirrored for display. */
-export interface TransferProgress {
-  /** Packets confirmed so far. */
-  readonly completed: number;
-  /** Total packets expected, or `undefined` before the manifest is known. */
-  readonly total: number | undefined;
-}
 
 /** Device conditions the UI reacts to (docs/ARCHITECTURE.md §6.6, "Device Status"). */
 export interface DeviceStatus {

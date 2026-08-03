@@ -4,6 +4,7 @@
  * Phase 1's exit criterion is that the architecture wires up and compiles
  * without any feature implementation. This suite is that criterion, executed.
  */
+import { sessionId, transferId } from '@domain/index';
 import { AppEvent } from '@events/index';
 import { AppPhase, initialAppState } from '@state/index';
 import { LogLevel, type LogRecord } from '@telemetry/index';
@@ -87,7 +88,7 @@ describe('createAppContainer', () => {
     });
 
     expect(() =>
-      bus.emit(AppEvent.TransferFailed, { transferId: 't1', code: 'TRANSFER_FAILED' }),
+      bus.emit(AppEvent.TransferFailed, { transferId: transferId('t1'), code: 'TRANSFER_FAILED' }),
     ).not.toThrow();
 
     const logged = records.find((record) => record.message === 'Event subscriber failed');
@@ -116,7 +117,10 @@ describe('createAppContainer', () => {
         }));
       });
 
-      bus.emit(AppEvent.TransferStarted, { transferId: 't1', sessionId: 's1' });
+      bus.emit(AppEvent.TransferStarted, {
+        transferId: transferId('t1'),
+        sessionId: sessionId('s1'),
+      });
 
       const state = store.getState();
       expect(state.phase).toBe(AppPhase.Transferring);
