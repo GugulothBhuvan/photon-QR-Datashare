@@ -24,6 +24,7 @@
  * Whichever phase reads §9.2 supplies the bytes-to-structure half.
  */
 import { AppError, ErrorCode } from '@core/errors';
+import { createManifestRegistry, type ManifestRegistry } from '@core/registry/manifestRegistry';
 import { invalid, mergeOutcomes, valid, type ValidationOutcome } from '@core/validation';
 
 import { createFileMetadata, type FileMetadata } from '@domain/fileMetadata';
@@ -241,8 +242,18 @@ function supports(supported: readonly string[] | undefined, method: string): boo
  * (§10.14). That is retention, not persistence: nothing here touches a
  * repository or the filesystem.
  */
-export function createManifestManager(): ManifestManager {
-  const accepted = new Map<SessionId, Manifest>();
+export interface ManifestManagerOptions {
+  /**
+   * Where accepted manifests are retained (§10.14).
+   *
+   * Injected so the manager holds protocol semantics and the registry holds
+   * storage. Defaults to a fresh in-memory registry.
+   */
+  readonly registry?: ManifestRegistry;
+}
+
+export function createManifestManager(options: ManifestManagerOptions = {}): ManifestManager {
+  const accepted = options.registry ?? createManifestRegistry();
 
   const manager: ManifestManager = {
     createManifest(input) {
@@ -486,13 +497,9 @@ export function createManifestManager(): ManifestManager {
 
     accept(manifest) {
       // §10.9, §10.14: immutable once accepted, and not regenerated during an
-      // active session.
-      if (accepted.has(manifest.sessionId)) {
-        return false;
-      }
-
-      accepted.set(manifest.sessionId, manifest);
-      return true;
+      // active session. The rule is the manager's; the storage is the
+      // registry's.
+      return accepted.setIfAbsent(manifest);
     },
 
     getManifest(id) {

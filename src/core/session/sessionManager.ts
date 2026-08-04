@@ -32,6 +32,8 @@ import {
 } from '@domain/session';
 import { sessionId as toSessionId, type ProtocolVersion, type SessionId } from '@domain/ids';
 
+import { createSessionRegistry, type SessionRegistry } from '@core/registry/sessionRegistry';
+
 import { canTransition, isActive, isLive, isTerminal } from './transitions';
 
 /**
@@ -59,23 +61,18 @@ export interface SessionManagerOptions {
   readonly protocolVersion: ProtocolVersion;
   /** Inactivity before a session expires (§8.9). */
   readonly timeoutMs?: number;
+  /**
+   * Where live sessions are held.
+   *
+   * Injected so the manager contains protocol semantics and the registry
+   * contains storage. Defaults to a fresh in-memory registry.
+   */
+  readonly registry?: SessionRegistry;
 }
 
 export interface CreateSessionOptions {
   /** Capabilities enabled for this session (§8.4, §8.7). */
   readonly capabilities?: readonly Capability[];
-}
-
-/**
- * A session together with the manager's bookkeeping for it.
- *
- * `lastActivityAt` is separate from the session value because §8.9 starts the
- * timeout countdown from protocol activity, which is not part of what a
- * session *is* — the domain model stays a value object.
- */
-interface SessionRecord {
-  readonly session: Session;
-  readonly lastActivityAt: number;
 }
 
 /** Why a transition was refused. */
@@ -167,12 +164,7 @@ export function createSessionManager(options: SessionManagerOptions): SessionMan
     );
   }
 
-  /** Insertion-ordered, so `listSessions` can report newest first. */
-  const records = new Map<SessionId, SessionRecord>();
-
-  function put(session: Session, lastActivityAt: number): void {
-    records.set(session.id, Object.freeze({ session, lastActivityAt }));
-  }
+  const registry = options.registry ?? createSessionRegistry();
 
   return {
     createSession(createOptions = {}) {
@@ -183,7 +175,7 @@ export function createSessionManager(options: SessionManagerOptions): SessionMan
 
       // §8.17.2 and §3.4: the id uniquely identifies the transfer. A generator
       // that repeats would silently merge two transfers (§8.11).
-      if (records.has(id)) {
+      if (registry.has(id)) {
         throw new AppError(ErrorCode.INVALID_CONFIGURATION, 'Generated a duplicate session id.', {
           details: { sessionId: id },
         });
@@ -200,25 +192,25 @@ export function createSessionManager(options: SessionManagerOptions): SessionMan
           : { capabilities: createOptions.capabilities }),
       });
 
-      put(session, timestamp);
+      registry.record(session, timestamp);
       return session;
     },
 
     getSession(id) {
-      return records.get(id)?.session;
+      return registry.getSession(id);
     },
 
     listSessions() {
-      return [...records.values()].map((record) => record.session).reverse();
+      return registry.sessions();
     },
 
     isSessionActive(id) {
-      const record = records.get(id);
+      const record = registry.get(id);
       return record !== undefined && isActive(record.session.state);
     },
 
     transition(id, to) {
-      const record = records.get(id);
+      const record = registry.get(id);
 
       if (record === undefined) {
         return { ok: false, reason: TransitionRefusal.UnknownSession };
@@ -236,24 +228,24 @@ export function createSessionManager(options: SessionManagerOptions): SessionMan
       }
 
       const session = withState(record.session, to);
-      put(session, now());
+      registry.record(session, now());
 
       return { ok: true, session };
     },
 
     touch(id) {
-      const record = records.get(id);
+      const record = registry.get(id);
 
       if (record === undefined || isTerminal(record.session.state)) {
         return false;
       }
 
-      put(record.session, now());
+      registry.record(record.session, now());
       return true;
     },
 
     acceptsPacketFrom(id, packetSessionId) {
-      const record = records.get(id);
+      const record = registry.get(id);
 
       if (record === undefined) {
         return false;
@@ -268,13 +260,13 @@ export function createSessionManager(options: SessionManagerOptions): SessionMan
       const deadline = now() - timeoutMs;
       const expired: Session[] = [];
 
-      for (const record of [...records.values()]) {
+      for (const record of registry.entries()) {
         if (isTerminal(record.session.state) || record.lastActivityAt > deadline) {
           continue;
         }
 
         const session = withState(record.session, SessionState.Expired);
-        put(session, record.lastActivityAt);
+        registry.record(session, record.lastActivityAt);
         expired.push(session);
       }
 
@@ -282,7 +274,7 @@ export function createSessionManager(options: SessionManagerOptions): SessionMan
     },
 
     closeSession(id) {
-      const record = records.get(id);
+      const record = registry.get(id);
 
       if (record === undefined) {
         return undefined;
@@ -293,7 +285,7 @@ export function createSessionManager(options: SessionManagerOptions): SessionMan
       }
 
       const session = withState(record.session, SessionState.Expired);
-      put(session, now());
+      registry.record(session, now());
 
       return session;
     },
@@ -301,10 +293,10 @@ export function createSessionManager(options: SessionManagerOptions): SessionMan
     releaseTerminated() {
       const released: SessionId[] = [];
 
-      for (const [id, record] of [...records.entries()]) {
+      for (const record of registry.entries()) {
         if (isTerminal(record.session.state)) {
-          records.delete(id);
-          released.push(id);
+          registry.delete(record.session.id);
+          released.push(record.session.id);
         }
       }
 

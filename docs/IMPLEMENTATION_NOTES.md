@@ -53,6 +53,40 @@ report.
 
 ---
 
+# 2.1 JSON Is Not Part Of The Protocol
+
+**JSON is a testing and development convenience. It is not, and must never
+become, part of protocol semantics.**
+
+The protocol is binary. `PACKET_SPEC.md` §3 defines the encoding — fixed-width
+big-endian integers, 16-byte UUIDs, raw payload bytes — and PROTOCOL_SPEC §2.3
+makes binary-native communication a design principle. Nothing that travels
+between two devices is JSON.
+
+Where JSON currently appears, and why each is legitimate:
+
+| Where | Why it is not protocol |
+| --- | --- |
+| `test_vectors/packets/*.json` | A container for a hex string and its description. The *vector* is the hex; the JSON is the envelope the test reads it from. The bytes are what is pinned. |
+| `ManifestManager.parseManifest` tests | The manager parses an already-decoded **structural value**, not JSON specifically. Tests hand it plain objects, and one test round-trips through `JSON.parse(JSON.stringify(...))` purely to prove the parser accepts a value it did not itself construct. |
+| `EntityCodec` in `createKeyValueRepository` | Local persistence of application records. Never transmitted. The codec is injected precisely so the storage format is a caller's choice, not a protocol fact. |
+
+Two rules follow:
+
+1. **No wire format is defined by a JSON shape.** The manifest's byte layout is
+   `PACKET_SPEC.md` §9.2 and will be implemented against that section. If a
+   manifest is ever serialized as JSON on the wire, that is a specification
+   change (AGENTS.md §7), not an implementation choice.
+2. **No protocol behaviour may depend on JSON's data model.** Key ordering,
+   number precision, absent-versus-`null`, and string escaping are JSON
+   concerns. The protocol's data model is bytes.
+
+Recorded here because A5-01 defers the manifest's wire encoding, and a deferred
+encoding is exactly the circumstance in which a convenience quietly becomes a
+contract.
+
+---
+
 # 3. Open Assumptions
 
 ## 3.1 Domain Models (Phase 2)
