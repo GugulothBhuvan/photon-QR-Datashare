@@ -12,6 +12,8 @@
 
 export { createRegistry, type Registry } from './registry';
 
+export { createPacketRegistry, NO_FILE, type PacketRegistry } from './packetRegistry';
+
 export { createManifestRegistry, type ManifestRegistry } from './manifestRegistry';
 
 export { createSessionRegistry, type SessionEntry, type SessionRegistry } from './sessionRegistry';

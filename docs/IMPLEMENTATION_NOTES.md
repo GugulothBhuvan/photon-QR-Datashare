@@ -95,12 +95,12 @@ contract.
 | --- | --- | --- | --- | --- |
 | A2-01 | `Session` omits the accumulating members of §8.7 — packet statistics, packet map, stored manifest. Those are managed state, not part of the value object. | A value object that accumulates is never equal to itself twice. §8.7 lists them as Session Context without saying whether they are one object. | `src/types/session.ts` | Verified — see §5 |
 | A2-02 | `Transfer` carries identity and shape with **no state machine**. | §12 Transfer Protocol and §26 Transfer FSM were both out of scope. Inventing states would create a second, unauthoritative definition of protocol behaviour. | `src/types/transfer.ts` | TransferManager, against §12 and §26.7 |
-| A2-03 | The domain packet kinds are Manifest, Data and Recovery. | §11.4 enumerates packet types formally and was unread. The three were attested by §8.5 and §10.10, which had been read. | `src/types/packet.ts` | PRO-003, against §11.4 |
+| A2-03 | The domain packet kinds are Manifest, Data and Recovery. | §11.4 enumerates packet types formally and was unread. The three were attested by §8.5 and §10.10, which had been read. | `src/types/packet.ts` | Verified — see §5 |
 | A2-04 | `ProtocolVersion` is a single number, later bounded to 0–255 by PACKET_SPEC §5. | §3.29 defines it as a numeric identifier. §23.3 defines the version *format* and was unread; if it is structured (major/minor), this type changes. | `src/types/ids.ts` | Version negotiation, against §23.3 |
 | A2-05 | Compression method, encryption method, recovery method and integrity algorithm are **opaque strings**, not enumerations. `'NONE'` is the only named constant. | §15, §18, §19 and §20 name the permitted values and were all unread. Enumerating them from guesswork would have invented protocol values. | `src/types/manifest.ts` | PRO-005 (§15), and the compression, encryption and integrity phases (§18, §19, §20) |
-| A2-06 | A manifest packet has no `fileId`; a data packet must have one. | §3.13 places a packet index within a *file* transfer, and a manifest describes the transfer rather than one file. §11 was unread. | `src/types/packet.ts` | PRO-003, against §11.4 and §11.7 |
-| A2-07 | A zero-byte file and a zero-packet manifest entry are legal. | §3.8 admits any byte sequence as a file. No section read said otherwise. | `src/types/fileMetadata.ts`, `src/types/manifest.ts` | PRO-002, against §10.7 and §10.13 |
-| A2-08 | The manifest **derives** `fileCount`, `totalSize` and `totalPacketCount` from its entries rather than accepting them as input. | §10.5 lists them as contents and §10.13 makes an inconsistent count grounds for rejection. Deriving them makes an inconsistent manifest unconstructable. Receiver-side validation of a manifest that arrived over the wire (§10.7) is a separate concern. | `src/types/manifest.ts` | PRO-002, against §10.7 and §10.13 |
+| A2-06 | A manifest packet has no `fileId`; a data packet must have one. | §3.13 places a packet index within a *file* transfer, and a manifest describes the transfer rather than one file. §11 was unread. | `src/types/packet.ts` | Verified — see §5 |
+| A2-07 | A zero-byte file and a zero-packet manifest entry are legal. | §3.8 admits any byte sequence as a file. No section read said otherwise. | `src/types/fileMetadata.ts`, `src/types/manifest.ts` | Verified — see §5 |
+| A2-08 | The manifest **derives** `fileCount`, `totalSize` and `totalPacketCount` from its entries rather than accepting them as input. | §10.5 lists them as contents and §10.13 makes an inconsistent count grounds for rejection. Deriving them makes an inconsistent manifest unconstructable. Receiver-side validation of a manifest that arrived over the wire (§10.7) is a separate concern. | `src/types/manifest.ts` | Verified — see §5 |
 
 ## 3.2 Packet Layer (Phase 3)
 
@@ -108,7 +108,7 @@ contract.
 | --- | --- | --- | --- | --- |
 | A3-01 | "CRC32" in PACKET_SPEC §6 means IEEE 802.3 — reflected polynomial `0xEDB88320`, init and final `0xFFFFFFFF`. | §6 names the field without naming a variant. This is what CRC32 means unqualified (zlib, PNG, gzip, Ethernet). Pinned by the standard `"123456789"` → `0xCBF43926` check vector. | `src/core/packet/crc32.ts` | Integrity phase, against §20.7 |
 | A3-02 | The CRC covers the header and payload — every byte before the footer. | §6 does not state the coverage. This is the only definition under which a receiver can verify a packet it has not yet trusted. | `src/core/packet/serializer.ts` | Integrity phase, against §20.5 |
-| A3-03 | The nil UUID in the header's File ID field means "belongs to no single file". | §5 makes the field mandatory, but a manifest packet belongs to no file. All-zero bytes are the natural encoding; §5 gives no sentinel. | `src/core/packet/serializer.ts` | PRO-003, against §11.7 |
+| A3-03 | The nil UUID in the header's File ID field means "belongs to no single file". | §5 makes the field mandatory, but a manifest packet belongs to no file. All-zero bytes are the natural encoding; §5 gives no sentinel. | `src/core/packet/serializer.ts` | Retained — see §5; recheck against PACKET_SPEC §9.2 |
 | A3-04 | A packet index at or beyond the declared total is invalid, when the total is non-zero. | §12 lists "Packet Index" as a validation item without stating the rule. §3.13 makes indices zero-based. §13 Packet Ordering was unread. | `src/core/packet/validator.ts` | Packet ordering work, against §13.4 |
 | A3-05 | The footer layout — whether the optional SHA-256 field is present — is fixed for a session and supplied to both serializer and parser. | §6 says footer size "depends on protocol configuration" without saying where that is carried. A reader cannot infer it: 36 trailing bytes are indistinguishable from 4 plus 32 bytes of payload. | `src/core/packet/footer.ts` | PRO-002 (manifest protocol configuration, §10.5) and the integrity phase |
 | A3-06 | The magic number is `0x4F53`. | The value appears nowhere in §5, which defines the field. Obtained by a targeted single-line search of §13, now sanctioned by AGENTS.md §7.1. | `src/core/packet/header.ts` | Any phase reading §13 |
@@ -133,6 +133,15 @@ contract.
 | A5-04 | A file's packet count defaults to `ceil(size / packetSize)` and may be overridden per file. | §10.5 requires a per-file packet count but does not say how it is derived. The derivation only holds when the transferred stream is the original bytes; a compressed or encrypted file occupies a different number of packets, and §18 and §19 were unread. | `src/core/manifest/manifestManager.ts` | Compression and encryption phases (§18, §19) |
 | A5-05 | An accepted manifest is retained **in memory**, keyed by session, and a second manifest for the same session is refused. | §10.14 requires the receiver to retain the manifest for the session's duration and forbids regenerating it during an active session; §10.9 makes it immutable once accepted. Where retention lives is not stated, and storage is out of scope for this milestone. | `src/core/manifest/manifestManager.ts` | Reconstruction and persistence work, against §10.14 |
 
+## 3.5 Packet Manager (PRO-003)
+
+| ID | Assumption | Why necessary | Where | Verify in |
+| --- | --- | --- | --- | --- |
+| A6-01 | §11.5's "every packet SHALL belong to exactly one File" is read as describing **data** packets. A manifest packet belongs to no file and is stored under a nil-UUID key. | Read literally, §11.5 would require a manifest packet to name one file — but §11.4 has exactly one manifest per session and §10.11 has it describing many files, so no single file could be named. The nil UUID is the same sentinel PACKET_SPEC §5 needs for the mandatory File ID field. | `src/core/registry/packetRegistry.ts`, `src/core/packet/packetManager.ts` | Reconstruction work, against §13 and §16 |
+| A6-02 | Unknown packet types (§11.4) are not handled by PacketManager. | §11.4 requires unknown *optional* types to be ignored and unknown *mandatory* types to terminate the session, but defines no way to tell which an unrecognised type is. The binary layer already rejects unregistered type bytes (`UNKNOWN_PACKET_TYPE`), so nothing is silently accepted. | `src/core/packet/deserializer.ts` | Against §24.10 Unknown Packet Types |
+| A6-03 | `packetize` divides a stream at exactly `packetSize` boundaries, producing contiguous indices from zero. | §11.9 says packets SHOULD use the negotiated size with a possibly shorter final packet, and §11.11 has the sender transmitting sequentially by index; neither states the division rule. §11.9 also permits smaller payloads "for transport optimization", which this does not implement. | `src/core/packet/packetManager.ts` | Adaptive transport (§17) |
+| A6-04 | `serialize`/`deserialize` on PacketManager (API_SPEC §7) are delegations to an injected codec, and the manager holds no byte logic. | API_SPEC §7 places both on this interface, while the layering requires the protocol layer not to implement binary concerns. Delegation satisfies both: the call direction Protocol → Binary is the permitted one. A manager built without a codec still performs every protocol operation. | `src/core/packet/packetManager.ts` | Whichever phase wires the codec in |
+
 ---
 
 # 4. Assumptions By Verifying Phase
@@ -141,20 +150,20 @@ A phase should check these before building on them.
 
 | Phase / work | Entries to verify |
 | --- | --- |
-| PRO-002 ManifestManager | A2-07, A2-08, A3-05 |
-| PRO-003 PacketManager | A2-03, A2-06, A3-03 |
 | PRO-004 ResumeEngine | A4-01 (check §26.4 first) |
 | PRO-005 RecoveryEngine | A2-05 (§15) |
 | TransferManager | A2-02, A4-05 |
-| Packet ordering | A3-04 |
-| Handshake | A4-02 |
-| Manifest wire format (PACKET_SPEC §9.2) | A5-01, A5-02 |
-| Compression / Encryption | A2-05 (§18, §19), A5-04 |
-| Integrity / Security (P11) | A3-01, A3-02, A2-05 (§20), A5-02 |
-| Compatibility rules (§24) | A5-03 |
-| Reconstruction / persistence | A5-05 |
-| Version negotiation | A2-04 |
-| Timing | A4-03 |
+| Packet ordering (§13) | A3-04 |
+| Reconstruction (§13, §16) | A6-01, A5-05 |
+| Handshake (§9) | A4-02 |
+| Manifest wire format (PACKET_SPEC §9.2) | A5-01, A5-02, A3-03, A3-05 |
+| Compression / Encryption (§18, §19) | A2-05, A5-04 |
+| Integrity / Security (§20, P11) | A3-01, A3-02, A2-05, A5-02, A3-05 |
+| Compatibility rules (§24) | A5-03, A6-02 |
+| Adaptive transport (§17) | A6-03 |
+| Version negotiation (§23) | A2-04 |
+| Timing (§22) | A4-03 |
+| Codec wiring | A6-04 |
 
 ---
 
@@ -164,6 +173,11 @@ A phase should check these before building on them.
 | --- | --- | --- |
 | A2-09 | Identifiers are opaque non-empty strings. | **Corrected.** PACKET_SPEC §5 gives the Session ID and File ID fields 16 bytes, encoded per §3 as UUIDs. The domain model was refactored to UUID-based value types so an identifier that cannot be serialized cannot be constructed. Recorded as a demonstration that this ledger works: the assumption was made before PACKET_SPEC was read, and reading it corrected the model. |
 | A2-01 | `Session` omits the accumulating members of §8.7. | **Confirmed** by PRO-001. The SessionManager owns `lastActivityAt` and the session registry; the domain model stayed a value object. |
+| A2-07 | A zero-byte file and a zero-packet manifest entry are legal. | **Confirmed** by PRO-002. §10.7 and §10.13 impose no minimum size or packet count; `packetsFor(0, n)` is 0 and a file declaring zero packets is complete. |
+| A2-08 | The manifest derives its totals rather than accepting them. | **Confirmed** by PRO-002 against §10.7.5 and §10.13. Deriving on creation and *checking* on parse turned out to be the right split: a manifest built locally cannot be inconsistent, and one that arrived is checked against exactly the §10.7.5 rule. |
+| A2-03 | The domain packet kinds are Manifest, Data and Recovery. | **Confirmed** by PRO-003 against §11.4, which defines exactly those three logical types plus a rule for future ones (see A6-02). No change needed. |
+| A2-06 | A manifest packet has no `fileId`; a data packet must have one. | **Confirmed for data packets** by §11.5, and PRO-003 now enforces it: a data packet with no file is rejected as `MISSING_FILE`. §11.5's literal text would also require a manifest packet to name one file, which is impossible — see A6-01. |
+| A3-03 | The nil UUID in the header's File ID field means "belongs to no single file". | **Retained.** §11.5 does not name a sentinel, and §11.4 with §10.11 confirm a manifest packet cannot belong to one file. The same key is now used by the packet registry, so encoding and storage agree. Still to be checked against PACKET_SPEC §9.2. |
 
 ---
 

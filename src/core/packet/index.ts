@@ -88,3 +88,16 @@ export {
   type HeaderValidationOptions,
   type ValidationResult,
 } from './validator';
+
+export {
+  AcceptOutcome,
+  createPacketManager,
+  PacketProtocolRejection,
+  type AcceptResult,
+  type PacketCodec,
+  type PacketExpectations,
+  type PacketizeInput,
+  type PacketManager,
+  type PacketManagerOptions,
+  type PacketValidationResult,
+} from './packetManager';
