@@ -16,6 +16,8 @@
  * manifest has arrived — follows PROTOCOL_SPEC.md and belongs to the protocol
  * engine, not here.
  */
+import { invalid, mergeOutcomes, valid, type ValidationOutcome } from '@core/validation';
+
 import { isUuid, UINT32_MAX, UINT8_MAX } from './bytes';
 import { crc32 } from './crc32';
 import { HEADER_SIZE, hasReservedBitsSet, isKnownPacketType, MAGIC_NUMBER } from './header';
@@ -37,17 +39,10 @@ export const PacketRejection = {
 
 export type PacketRejection = (typeof PacketRejection)[keyof typeof PacketRejection];
 
-export interface ValidationResult {
-  readonly valid: boolean;
-  /** Every reason the packet failed, in validation order. Empty when valid. */
-  readonly rejections: readonly PacketRejection[];
-}
+/** Packet validation outcome. The shape is shared; the vocabulary is not. */
+export type ValidationResult = ValidationOutcome<PacketRejection>;
 
-const VALID: ValidationResult = Object.freeze({ valid: true, rejections: Object.freeze([]) });
-
-function invalid(rejections: readonly PacketRejection[]): ValidationResult {
-  return Object.freeze({ valid: false, rejections: Object.freeze([...rejections]) });
-}
+const VALID: ValidationResult = valid<PacketRejection>();
 
 export interface HeaderValidationOptions {
   /**
@@ -160,15 +155,5 @@ export function validateChecksum(
 
 /** Merges results, preserving order and dropping duplicates. */
 export function mergeResults(...results: readonly ValidationResult[]): ValidationResult {
-  const rejections: PacketRejection[] = [];
-
-  for (const result of results) {
-    for (const rejection of result.rejections) {
-      if (!rejections.includes(rejection)) {
-        rejections.push(rejection);
-      }
-    }
-  }
-
-  return rejections.length === 0 ? VALID : invalid(rejections);
+  return mergeOutcomes(...results);
 }

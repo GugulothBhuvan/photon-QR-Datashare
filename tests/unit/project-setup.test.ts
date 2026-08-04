@@ -49,8 +49,27 @@ describe('project skeleton', () => {
     expect(fs.existsSync(barrel)).toBe(true);
   });
 
-  it('keeps the documentation set intact', () => {
+  it('keeps the twelve specification documents intact', () => {
+    // Named rather than counted, so adding a document such as
+    // IMPLEMENTATION_NOTES.md does not fail the build, but losing a
+    // specification does.
     const docs = fs.readdirSync(path.join(PROJECT_ROOT, 'docs'));
-    expect(docs.filter((entry) => entry.endsWith('.md'))).toHaveLength(12);
+
+    expect(docs).toEqual(
+      expect.arrayContaining([
+        'PRD.md',
+        'TRD.md',
+        'ARCHITECTURE.md',
+        'PROTOCOL_SPEC.md',
+        'PACKET_SPEC.md',
+        'QR_SPEC.md',
+        'SECURITY.md',
+        'STATE_MACHINES.md',
+        'UI_SPEC.md',
+        'API_SPEC.md',
+        'TEST_SPEC.md',
+        'ROADMAP.md',
+      ]),
+    );
   });
 });
