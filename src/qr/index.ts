@@ -26,10 +26,12 @@ export {
   DEFAULT_FOREGROUND,
   DISPLAY_RECOMMENDATION,
   QUIET_ZONE_MODULES,
+  rasterizeFrame,
   renderFrame,
   toSvgPath,
   type DisplayRecommendation,
   type ModuleRect,
+  type RasterFrame,
   type RenderedFrame,
   type RenderOptions,
 } from './qrRenderer';

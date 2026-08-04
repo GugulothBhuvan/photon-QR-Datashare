@@ -158,6 +158,79 @@ export function renderFrame(frame: QrFrame, options: RenderOptions): RenderedFra
   });
 }
 
+/** A rasterised frame: RGBA pixels ready for a bitmap surface or a decoder. */
+export interface RasterFrame {
+  readonly width: number;
+  readonly height: number;
+  /** RGBA, row-major, four bytes per pixel. */
+  readonly data: Uint8ClampedArray;
+}
+
+/**
+ * Rasterises a frame to RGBA pixels.
+ *
+ * Offered alongside the vector output because §16 expects bitmap rendering to
+ * be a supported path, and because it is what closes the optical loop in
+ * testing: a rasterised frame is exactly what a camera would deliver, so the
+ * receive pipeline can be exercised end to end without a device.
+ *
+ * Black on white with an opaque alpha throughout, per §13.
+ *
+ * @param scale Pixels per module. Must be a positive integer — a fractional
+ *   scale would produce the distortion §13 forbids.
+ */
+export function rasterizeFrame(
+  frame: QrFrame,
+  scale = 1,
+  quietZoneModules = QUIET_ZONE_MODULES,
+): RasterFrame {
+  if (!Number.isInteger(scale) || scale < 1) {
+    throw new AppError(
+      ErrorCode.INVALID_CONFIGURATION,
+      'Raster scale must be a positive integer.',
+      {
+        details: { scale },
+      },
+    );
+  }
+
+  if (quietZoneModules < QUIET_ZONE_MODULES) {
+    throw new AppError(
+      ErrorCode.INVALID_CONFIGURATION,
+      `Quiet zone must be at least ${QUIET_ZONE_MODULES} modules (QR_SPEC §13).`,
+      { details: { quietZoneModules } },
+    );
+  }
+
+  const side = (frame.size + quietZoneModules * 2) * scale;
+  // Filled white first, which paints the quiet zone and every light module in
+  // one pass rather than per pixel.
+  const data = new Uint8ClampedArray(side * side * 4).fill(255);
+
+  for (let y = 0; y < frame.size; y += 1) {
+    for (let x = 0; x < frame.size; x += 1) {
+      if (moduleAt(frame, x, y) !== 1) {
+        continue;
+      }
+
+      for (let dy = 0; dy < scale; dy += 1) {
+        for (let dx = 0; dx < scale; dx += 1) {
+          const px = (quietZoneModules + x) * scale + dx;
+          const py = (quietZoneModules + y) * scale + dy;
+          const offset = (py * side + px) * 4;
+
+          data[offset] = 0;
+          data[offset + 1] = 0;
+          data[offset + 2] = 0;
+          // Alpha stays 255: §13 forbids transparency.
+        }
+      }
+    }
+  }
+
+  return Object.freeze({ width: side, height: side, data });
+}
+
 /**
  * Renders a frame as an SVG path string.
  *

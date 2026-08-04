@@ -161,6 +161,16 @@ contract.
 | A9-04 | Module size is floored to a whole unit, so a rendered code may be smaller than the requested target. | §13 forbids distortion, and fractional module sizes produce seams and blurred edges. §13 gives no sizing rule. | `src/qr/qrRenderer.ts` | UI phase, against §11 |
 | A9-05 | Maximum byte capacities per level (2953 / 2331 / 1663 / 1273) are hard-coded. | §6 leaves supported versions implementation-defined and gives no capacity table. These are the ISO/IEC 18004 values for version 40, not invented ones, and are needed so the transport can choose a packet size instead of discovering the limit by failing. | `src/qr/qrEncoder.ts` | Any phase reading QR_SPEC Appendix A |
 
+## 3.9 Camera Engine (Phase 6)
+
+| ID | Assumption | Why necessary | Where | Verify in |
+| --- | --- | --- | --- | --- |
+| A10-01 | Frames carry either 8-bit luminance or 8-bit RGBA, and nothing else. | QR_SPEC §12 describes camera behaviour without naming a pixel format. Real devices also deliver YUV planar formats, which a concrete adapter will have to convert. The port accepts the two formats decoding actually needs. | `src/camera/cameraPort.ts` | When the device adapter lands, against the camera SDK's formats |
+| A10-02 | A frame outside mean luminance 16–240 is skipped without attempting a decode. | §12 asks receivers to optimise exposure but gives no measure or threshold. The bounds are chosen to catch a covered lens or a light pointed at the camera, not to judge picture quality. | `src/camera/frameProcessor.ts` | Performance phase, against §16 |
+| A10-03 | Downsampling takes the top-left pixel of each block rather than averaging. | §16 recommends minimising cost without prescribing a method. Averaging blurs the hard edges a QR code is made of; a blurred edge thresholds worse than a sharp one that moved. | `src/camera/frameProcessor.ts` | Performance phase, against §16 |
+| A10-04 | Grayscale conversion uses ITU-R BT.601 weights with rounding. | No specification names a luminance formula. BT.601 is the standard weighting; rounding rather than truncating avoids a consistent downward bias of up to one level. | `src/camera/frameProcessor.ts` | — |
+| A10-05 | Transport-level validation (§18) means: a symbol was located, error correction resolved, and payload bytes were extracted. | §18 requires "basic transport integrity" without defining it, and defers packet validation to PACKET_SPEC. These are the checks available at this layer without knowing what a packet is. | `src/camera/qrDecoder.ts` | Against QR_SPEC §18 if it is ever expanded |
+
 ## 3.7 Recovery Engine (PRO-005)
 
 | ID | Assumption | Why necessary | Where | Verify in |
@@ -192,6 +202,9 @@ A phase should check these before building on them.
 | Compatibility rules (§24) | A5-03, A6-02 |
 | Adaptive transport (§17) | A6-03, A9-01, A9-02 |
 | QR rendering and capacity (QR_SPEC §16, Appendix A) | A9-03, A9-04, A9-05 |
+| Device camera adapter | A10-01 |
+| Performance (§16, Phase 10) | A10-02, A10-03 |
+| Transport validation (QR_SPEC §18) | A10-05 |
 | Version negotiation (§23) | A2-04 |
 | Timing (§22) | A4-03 |
 | Codec wiring | A6-04 |
