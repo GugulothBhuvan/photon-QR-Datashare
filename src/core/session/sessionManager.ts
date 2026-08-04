@@ -10,7 +10,7 @@
  * - **Not transport-aware.** Nothing here knows about QR codes, cameras or
  *   frames. §8 describes sessions in terms of protocol state only, and the
  *   engine stays transport-agnostic.
- * - **Not a clock.** `now` and `generateSessionId` are injected. A manager
+ * - **Not a clock.** `Clock` and `IdGenerator` arrive as contracts. A manager
  *   that read `Date.now()` or `crypto.randomUUID()` directly could not be
  *   tested deterministically, and PROTOCOL_SPEC §2.4 requires deterministic
  *   behaviour.
@@ -32,6 +32,7 @@ import {
 } from '@domain/session';
 import { sessionId as toSessionId, type ProtocolVersion, type SessionId } from '@domain/ids';
 
+import type { Clock, IdGenerator } from '@core/contracts';
 import { createSessionRegistry, type SessionRegistry } from '@core/registry/sessionRegistry';
 
 import { canTransition, isActive, isLive, isTerminal } from './transitions';
@@ -47,16 +48,21 @@ import { canTransition, isActive, isLive, isTerminal } from './transitions';
 export const DEFAULT_SESSION_TIMEOUT_MS = 15 * 60 * 1000;
 
 export interface SessionManagerOptions {
-  /** Epoch milliseconds. Injected so behaviour is deterministic under test. */
-  readonly now: () => number;
+  /**
+   * The engine's source of time (`@core/contracts`).
+   *
+   * A contract rather than a bare function so that every manager takes time
+   * from the same declared dependency.
+   */
+  readonly clock: Clock;
   /**
    * Produces a globally unique session id (§8.4).
    *
-   * Must return a UUID: PACKET_SPEC §5 gives the field 16 bytes. Injected
-   * because generating one requires randomness, which the protocol engine
-   * must not contain if it is to stay deterministic.
+   * Must return a UUID: PACKET_SPEC §5 gives the field 16 bytes. A contract
+   * because generating one requires randomness, which the protocol engine must
+   * not contain if it is to stay deterministic.
    */
-  readonly generateSessionId: () => string;
+  readonly idGenerator: IdGenerator;
   /** Protocol version new sessions are created with. */
   readonly protocolVersion: ProtocolVersion;
   /** Inactivity before a session expires (§8.9). */
@@ -153,7 +159,7 @@ export interface SessionManager {
  * and one session's behaviour never affects another's.
  */
 export function createSessionManager(options: SessionManagerOptions): SessionManager {
-  const { now, generateSessionId, protocolVersion } = options;
+  const { clock, idGenerator, protocolVersion } = options;
   const timeoutMs = options.timeoutMs ?? DEFAULT_SESSION_TIMEOUT_MS;
 
   if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
@@ -168,7 +174,7 @@ export function createSessionManager(options: SessionManagerOptions): SessionMan
 
   return {
     createSession(createOptions = {}) {
-      const raw = generateSessionId();
+      const raw = idGenerator.next();
       // Fails loudly rather than producing a session that cannot be
       // serialized: PACKET_SPEC §5 carries the id in 16 bytes.
       const id = toSessionId(raw);
@@ -181,7 +187,7 @@ export function createSessionManager(options: SessionManagerOptions): SessionMan
         });
       }
 
-      const timestamp = now();
+      const timestamp = clock.now();
       const session = createSession({
         id,
         protocolVersion,
@@ -228,7 +234,7 @@ export function createSessionManager(options: SessionManagerOptions): SessionMan
       }
 
       const session = withState(record.session, to);
-      registry.record(session, now());
+      registry.record(session, clock.now());
 
       return { ok: true, session };
     },
@@ -240,7 +246,7 @@ export function createSessionManager(options: SessionManagerOptions): SessionMan
         return false;
       }
 
-      registry.record(record.session, now());
+      registry.record(record.session, clock.now());
       return true;
     },
 
@@ -257,7 +263,7 @@ export function createSessionManager(options: SessionManagerOptions): SessionMan
     },
 
     expireIdleSessions() {
-      const deadline = now() - timeoutMs;
+      const deadline = clock.now() - timeoutMs;
       const expired: Session[] = [];
 
       for (const record of registry.entries()) {
@@ -285,7 +291,7 @@ export function createSessionManager(options: SessionManagerOptions): SessionMan
       }
 
       const session = withState(record.session, SessionState.Expired);
-      registry.record(session, now());
+      registry.record(session, clock.now());
 
       return session;
     },

@@ -11,6 +11,7 @@ import {
   TransitionRefusal,
   type SessionManager,
 } from '@core/session/sessionManager';
+import type { IdGenerator } from '@core/contracts';
 import { protocolVersion, sessionId } from '@domain/ids';
 import { Capability, SessionState } from '@domain/session';
 
@@ -27,20 +28,25 @@ function makeClock(start = 1_700_000_000_000) {
   };
 }
 
-/** Deterministic UUID generator. */
-function makeIdSource() {
+/** Deterministic UUID generator, satisfying the IdGenerator contract. */
+function makeIdSource(): IdGenerator {
   let counter = 0;
-  return () => {
-    counter += 1;
-    return `00000000-0000-4000-8000-${String(counter).padStart(12, '0')}`;
+  return {
+    next: () => {
+      counter += 1;
+      return `00000000-0000-4000-8000-${String(counter).padStart(12, '0')}`;
+    },
   };
 }
+
+/** An IdGenerator that always returns the same value. */
+const fixedIds = (value: string): IdGenerator => ({ next: () => value });
 
 function makeManager(overrides: Partial<Parameters<typeof createSessionManager>[0]> = {}) {
   const clock = makeClock();
   const manager = createSessionManager({
-    now: clock.now,
-    generateSessionId: makeIdSource(),
+    clock,
+    idGenerator: makeIdSource(),
     protocolVersion: VERSION,
     ...overrides,
   });
@@ -75,8 +81,8 @@ describe('createSession (§8.4, §7.4)', () => {
   it('records the creation time from the injected clock', () => {
     const clock = makeClock(5000);
     const manager = createSessionManager({
-      now: clock.now,
-      generateSessionId: makeIdSource(),
+      clock,
+      idGenerator: makeIdSource(),
       protocolVersion: VERSION,
     });
 
@@ -93,7 +99,7 @@ describe('createSession (§8.4, §7.4)', () => {
   });
 
   it('rejects a generator that does not produce a UUID', () => {
-    const { manager } = makeManager({ generateSessionId: () => 'session-1' });
+    const { manager } = makeManager({ idGenerator: fixedIds('session-1') });
 
     // PACKET_SPEC §5 carries the id in 16 bytes; failing here beats failing
     // at serialization time.
@@ -103,7 +109,7 @@ describe('createSession (§8.4, §7.4)', () => {
   it('rejects a generator that repeats an id', () => {
     // A repeated id would silently merge two transfers (§8.11).
     const { manager } = makeManager({
-      generateSessionId: () => '00000000-0000-4000-8000-000000000001',
+      idGenerator: fixedIds('00000000-0000-4000-8000-000000000001'),
     });
 
     manager.createSession();
@@ -305,8 +311,8 @@ describe('timeout and expiration (§8.9, §8.10)', () => {
   it('honours a configured timeout', () => {
     const clock = makeClock();
     const manager = createSessionManager({
-      now: clock.now,
-      generateSessionId: makeIdSource(),
+      clock,
+      idGenerator: makeIdSource(),
       protocolVersion: VERSION,
       timeoutMs: 1000,
     });
@@ -320,8 +326,8 @@ describe('timeout and expiration (§8.9, §8.10)', () => {
   it.each([0, -1, Number.NaN])('rejects a timeout of %p', (timeoutMs) => {
     expect(() =>
       createSessionManager({
-        now: makeClock().now,
-        generateSessionId: makeIdSource(),
+        clock: makeClock(),
+        idGenerator: makeIdSource(),
         protocolVersion: VERSION,
         timeoutMs,
       }),

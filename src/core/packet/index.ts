@@ -94,7 +94,6 @@ export {
   createPacketManager,
   PacketProtocolRejection,
   type AcceptResult,
-  type PacketCodec,
   type PacketExpectations,
   type PacketizeInput,
   type PacketManager,

@@ -467,16 +467,18 @@ describe('layer separation', () => {
   });
 
   it('delegates serialization to the injected codec (API_SPEC §7)', () => {
-    const serialize = jest.fn(() => new Uint8Array([1, 2, 3]));
-    const deserialize = jest.fn(() => dataPacket(0));
-    const manager = createPacketManager({ codec: { serialize, deserialize } });
+    const encode = jest.fn(() => new Uint8Array([1, 2, 3]));
+    const decode = jest.fn(() => ({ packet: dataPacket(0), integrityVerified: true }));
+    const manager = createPacketManager({ codec: { encode, decode } });
 
     const packet = dataPacket(0);
     expect(Array.from(manager.serialize(packet))).toEqual([1, 2, 3]);
-    expect(serialize).toHaveBeenCalledWith(packet);
+    expect(encode).toHaveBeenCalledWith(packet);
 
-    manager.deserialize(new Uint8Array([1]));
-    expect(deserialize).toHaveBeenCalled();
+    // The codec reports the integrity verdict alongside the packet, because
+    // §11.12 has integrity decided before the protocol layer stores anything.
+    expect(manager.deserialize(new Uint8Array([1]))?.integrityVerified).toBe(true);
+    expect(decode).toHaveBeenCalled();
   });
 
   it('accepts an injected registry', () => {

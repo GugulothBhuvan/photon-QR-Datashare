@@ -117,8 +117,8 @@ contract.
 
 | ID | Assumption | Why necessary | Where | Verify in |
 | --- | --- | --- | --- | --- |
-| A4-01 | The session lifecycle is not literally linear. The transition table encodes §8.8 and the §8.17 invariants, with §8.3 as the happy path. | §8.3 draws a chain, but §8.8 has Active returning from Paused via Resuming, and §8.9 lets a timeout expire any live state. §26.4 Session FSM and `docs/STATE_MACHINES.md` were both out of scope. | `src/core/session/transitions.ts` | Against §26.4 and `docs/STATE_MACHINES.md`, before PRO-004 |
-| A4-02 | `Handshake → Waiting` is a legal transition: a failed handshake need not end the session. | §8.8 has the sender waiting for receivers, but §9 Handshake Protocol was unread and may specify otherwise. | `src/core/session/transitions.ts` | Handshake work, against §9.14 |
+| A4-01 | The session lifecycle is not literally linear. The transition table encodes §8.8 and the §8.17 invariants, with §8.3 as the happy path. | §8.3 draws a chain, but §8.8 has Active returning from Paused via Resuming, and §8.9 lets a timeout expire any live state. §26.4 Session FSM and `docs/STATE_MACHINES.md` were both out of scope. | `src/core/session/transitions.ts` | Verified — see §5 |
+| A4-02 | `Handshake → Waiting` is a legal transition: a failed handshake need not end the session. | §8.8 has the sender waiting for receivers, but §9 Handshake Protocol was unread and may specify otherwise. | `src/core/session/transitions.ts` | Removed — see §5 |
 | A4-03 | The default session timeout is 15 minutes. | §8.9 states timeout values MAY be implementation-specific, so this is a choice rather than a protocol constant. §22 Timing Rules was unread and may constrain it. | `src/core/session/sessionManager.ts` | Against §22.5 |
 | A4-04 | A generator that repeats a session id is a fatal error rather than a retryable one. | §8.17.2 requires exactly one immutable id per session; a repeat would silently merge two transfers (§8.11). No section read describes recovery from this. | `src/core/session/sessionManager.ts` | Against §8, when session persistence is implemented |
 | A4-05 | `closeSession` moves a live session to `Expired`; reaching `Completed` is the caller's transition first. | §8.14 lists successful completion among termination conditions without saying which state a close produces. | `src/core/session/sessionManager.ts` | TransferManager, against §12.11 |
@@ -142,6 +142,15 @@ contract.
 | A6-03 | `packetize` divides a stream at exactly `packetSize` boundaries, producing contiguous indices from zero. | §11.9 says packets SHOULD use the negotiated size with a possibly shorter final packet, and §11.11 has the sender transmitting sequentially by index; neither states the division rule. §11.9 also permits smaller payloads "for transport optimization", which this does not implement. | `src/core/packet/packetManager.ts` | Adaptive transport (§17) |
 | A6-04 | `serialize`/`deserialize` on PacketManager (API_SPEC §7) are delegations to an injected codec, and the manager holds no byte logic. | API_SPEC §7 places both on this interface, while the layering requires the protocol layer not to implement binary concerns. Delegation satisfies both: the call direction Protocol → Binary is the permitted one. A manager built without a codec still performs every protocol operation. | `src/core/packet/packetManager.ts` | Whichever phase wires the codec in |
 
+## 3.6 Resume Engine (PRO-004)
+
+| ID | Assumption | Why necessary | Where | Verify in |
+| --- | --- | --- | --- | --- |
+| A7-01 | Resume acts on a session in `Paused` (or already `Resuming`). A session still `Active`, or one that never reached `Active`, is refused as not resumable. | §14.3's lifecycle starts at Active → Interrupted → Paused, and §14.7 transitions Paused → Resuming, but §14 never states which states are ineligible. "Interrupted" appears in §14.3's diagram and is not a `SessionState` in §8.8 or §26.4 — it is read as the event that causes the pause, not a state. | `src/core/resume/resumeEngine.ts` | Against §12 Transfer Protocol, which may name an interrupted transfer state |
+| A7-02 | Packet-map integrity (§14.7.4) is checked as: every stored index is below its file's declared count, and every file holding packets is described by the manifest. | §14.7.4 requires "Packet Map integrity" to be verified without defining what integrity of the map means. These are the two ways a map and a manifest can disagree using only information both hold. | `src/core/resume/resumeEngine.ts` | Against §13.16 Packet Map |
+| A7-03 | Resume is split into `requestResume` (validate, Paused → Resuming) and `completeResume` (Resuming → Active). | §14.3 lists "Resume Requested", "Session Validation" and "Continue Transfer" as distinct steps, but §14 gives no API. Splitting them lets a caller prepare between validation and continuation; collapsing them would make the `Resuming` state unobservable. | `src/core/resume/resumeEngine.ts` | Against §26.8 Resume FSM |
+| A7-04 | On resume failure the engine terminates the session **and** releases packet storage, then reports. It does not set a `Failed` transfer state. | §14.7 and §14.13 require the session to terminate and temporary packet storage to be released. §14.13 also says "the transfer SHALL enter the Failed state" — but Transfer has no state machine yet (A2-02), so that part is not implemented. | `src/core/resume/resumeEngine.ts` | TransferManager, against §12 and §26.7 |
+
 ---
 
 # 4. Assumptions By Verifying Phase
@@ -150,12 +159,13 @@ A phase should check these before building on them.
 
 | Phase / work | Entries to verify |
 | --- | --- |
-| PRO-004 ResumeEngine | A4-01 (check §26.4 first) |
 | PRO-005 RecoveryEngine | A2-05 (§15) |
 | TransferManager | A2-02, A4-05 |
 | Packet ordering (§13) | A3-04 |
 | Reconstruction (§13, §16) | A6-01, A5-05 |
-| Handshake (§9) | A4-02 |
+| TransferManager | A7-01, A7-04 |
+| Packet map (§13.16) | A7-02 |
+| Resume FSM (§26.8) | A7-03 |
 | Manifest wire format (PACKET_SPEC §9.2) | A5-01, A5-02, A3-03, A3-05 |
 | Compression / Encryption (§18, §19) | A2-05, A5-04 |
 | Integrity / Security (§20, P11) | A3-01, A3-02, A2-05, A5-02, A3-05 |
@@ -173,6 +183,8 @@ A phase should check these before building on them.
 | --- | --- | --- |
 | A2-09 | Identifiers are opaque non-empty strings. | **Corrected.** PACKET_SPEC §5 gives the Session ID and File ID fields 16 bytes, encoded per §3 as UUIDs. The domain model was refactored to UUID-based value types so an identifier that cannot be serialized cannot be constructed. Recorded as a demonstration that this ledger works: the assumption was made before PACKET_SPEC was read, and reading it corrected the model. |
 | A2-01 | `Session` omits the accumulating members of §8.7. | **Confirmed** by PRO-001. The SessionManager owns `lastActivityAt` and the session registry; the domain model stayed a value object. |
+| A4-01 | The session lifecycle is not literally linear; the table encoded §8.8 and the §8.17 invariants. | **Partly corrected** by reading §26.4 and STATE_MACHINES.md §6 before PRO-004. §26.4 supplies an explicit allowed-transition list, which is now honoured in full — including the direct `Paused → Active` edge, which the table had been missing. `Resuming` is kept because §8.8 defines its semantics and §8.3 lists it; §26.4 omitting it is read as showing the shortest path, not as deleting a state. Every live state may still expire, because §8.9's SHALL outranks §26.4's unkeyworded list under the §4.6 precedence rule. Full reasoning is in `src/core/session/transitions.ts`. |
+| A4-02 | `Handshake → Waiting` is legal: a failed handshake need not end the session. | **Contradicted and removed.** §26.4's allowed-transition list does not contain it, and no other section supports it. The edge was an inference from §8.8's description of the sender waiting for receivers. A handshake that fails now either retries within `Handshake` or expires. |
 | A2-07 | A zero-byte file and a zero-packet manifest entry are legal. | **Confirmed** by PRO-002. §10.7 and §10.13 impose no minimum size or packet count; `packetsFor(0, n)` is 0 and a file declaring zero packets is complete. |
 | A2-08 | The manifest derives its totals rather than accepting them. | **Confirmed** by PRO-002 against §10.7.5 and §10.13. Deriving on creation and *checking* on parse turned out to be the right split: a manifest built locally cannot be inconsistent, and one that arrived is checked against exactly the §10.7.5 rule. |
 | A2-03 | The domain packet kinds are Manifest, Data and Recovery. | **Confirmed** by PRO-003 against §11.4, which defines exactly those three logical types plus a rule for future ones (see A6-02). No change needed. |

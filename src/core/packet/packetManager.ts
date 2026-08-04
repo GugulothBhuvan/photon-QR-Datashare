@@ -28,6 +28,7 @@
  * It also does not render QR codes, read a camera, manage sessions, or
  * reconstruct files.
  */
+import type { DecodedPacket, PacketCodec } from '@core/contracts';
 import { invalid, valid, type ValidationOutcome } from '@core/validation';
 import { NO_FILE, type PacketRegistry } from '@core/registry/packetRegistry';
 import { createPacketRegistry } from '@core/registry/packetRegistry';
@@ -110,12 +111,6 @@ export interface PacketizeInput {
   readonly type?: PacketType;
 }
 
-/** Optional codec, so the manager can satisfy API_SPEC §7 without owning bytes. */
-export interface PacketCodec {
-  serialize(packet: Packet): Uint8Array;
-  deserialize(bytes: Uint8Array): Packet | undefined;
-}
-
 export interface PacketManagerOptions {
   /** Where validated packets are held. Defaults to a fresh in-memory registry. */
   readonly registry?: PacketRegistry;
@@ -181,7 +176,7 @@ export interface PacketManager {
   serialize(packet: Packet): Uint8Array;
 
   /** Parses a packet by delegating to the injected codec (API_SPEC §7). */
-  deserialize(bytes: Uint8Array): Packet | undefined;
+  deserialize(bytes: Uint8Array): DecodedPacket | undefined;
 }
 
 /** Thrown when a codec-dependent method is used without a codec. */
@@ -339,11 +334,11 @@ export function createPacketManager(options: PacketManagerOptions = {}): PacketM
     },
 
     serialize(packet) {
-      return requireCodec(codec).serialize(packet);
+      return requireCodec(codec).encode(packet);
     },
 
     deserialize(bytes) {
-      return requireCodec(codec).deserialize(bytes);
+      return requireCodec(codec).decode(bytes);
     },
   };
 
