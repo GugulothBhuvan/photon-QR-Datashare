@@ -221,19 +221,103 @@ reference it from §14.13 and §15.10, or define it in §12.
 
 ---
 
+## SI-008 — A `MAJOR.MINOR` protocol version cannot fit the one-byte header field
+
+| | |
+| --- | --- |
+| **Document** | `PROTOCOL_SPEC.md` and `PACKET_SPEC.md` |
+| **Section** | PROTOCOL_SPEC §23.3, against PACKET_SPEC §5 |
+| **Status** | `Open` — **blocking** |
+
+**Description.** §23.3 requires every protocol version to consist of
+`MAJOR.MINOR`, with major increments marking breaking changes and minor
+increments marking backward-compatible ones. PACKET_SPEC §5 gives the Protocol
+Version header field **one byte**.
+
+One byte cannot carry two independent components unless an encoding is defined
+— a nibble split, a lookup table, or anything else. Neither document defines
+one. §3.29 adds to the confusion by describing the protocol version as "a
+numeric identifier", which reads as a single number.
+
+**Impact.** This is the one issue so far that cannot be worked around by
+choosing a reading, because any choice **invents wire format**:
+
+- Packing 4 bits each caps both components at 15 and is not stated anywhere.
+- Treating the byte as MAJOR only discards MINOR, which §23.9 relies on for
+  compatibility decisions.
+- Treating it as an index into a version table requires a table nobody has
+  defined.
+
+AGENTS.md §7 forbids changing protocol behaviour silently, and inventing an
+encoding for a mandatory header field is exactly that. So the implementation
+has **not** been changed to match §23.3.
+
+**Current state.** `ProtocolVersion` is a single integer bounded 0–255, which
+satisfies PACKET_SPEC §5 and §3.29 but not §23.3. Recorded in
+`IMPLEMENTATION_NOTES.md` as A2-04, now marked contradicted-and-blocked.
+
+**Suggested resolution.** Whichever the specification's owner intends:
+
+1. **Define the packing in PACKET_SPEC §5** — for example high nibble MAJOR,
+   low nibble MINOR — and state the maximum of each.
+2. **Widen the field to two bytes** in PACKET_SPEC §5, one per component. This
+   changes the header layout and the 50-byte header size, so it is a breaking
+   change to the wire format.
+3. **Amend §23.3** to state that the on-wire version is a single ordinal, with
+   `MAJOR.MINOR` being a human-facing label mapped through a published table.
+
+Option 2 is cleanest and least surprising; option 1 is cheapest. Until one is
+chosen, version negotiation (§23.5) cannot be implemented correctly.
+
+---
+
+## SI-009 — §24.9 requires rejecting unknown mandatory fields but still defines no way to identify one
+
+| | |
+| --- | --- |
+| **Document** | `PROTOCOL_SPEC.md` |
+| **Section** | §24.9 Unknown Fields, with §10.12 |
+| **Status** | `Open` |
+
+**Description.** An escalation of SI-006 rather than a duplicate. §24.9 is more
+emphatic than §10.12 — an unknown mandatory field SHALL terminate the session,
+and "implementations SHALL NOT guess the meaning of unknown mandatory fields" —
+but it still gives no mechanism by which a receiver distinguishes an unknown
+*mandatory* field from an unknown *optional* one.
+
+**Impact.** Taken together the two sections require a decision that cannot be
+made from the data available. In practice a receiver ignores everything it does
+not recognise, which is §24.9's *optional* branch applied universally — so a
+future mandatory field will be silently ignored by older implementations
+instead of terminating the session, which is precisely the failure §24.9 exists
+to prevent.
+
+**Suggested resolution.** Define the mechanism, and reference it from both
+§10.12 and §24.9. The usual options: a `requiredFeatures` list in the manifest;
+a reserved field-number range meaning "mandatory"; or a per-field minimum
+protocol version. §24.8 Reserved Fields is the natural place for the second.
+
+---
+
 # 4. Index By Document
 
 | Document | Issues |
 | --- | --- |
-| `PROTOCOL_SPEC.md` | SI-001, SI-002, SI-004, SI-005, SI-006, SI-007 |
+| `PROTOCOL_SPEC.md` | SI-001, SI-002, SI-004, SI-005, SI-006, SI-007, SI-009 |
 | `STATE_MACHINES.md` | SI-003 |
-| `PACKET_SPEC.md` | — |
+| `PACKET_SPEC.md` | SI-008 (jointly with PROTOCOL_SPEC) |
 
 # 5. Index By Status
 
 | Status | Issues |
 | --- | --- |
 | `Working` | SI-001, SI-002, SI-005 |
-| `Open` | SI-003, SI-004, SI-006, SI-007 |
+| `Open` | SI-003, SI-004, SI-006, SI-007, SI-009 |
+| `Open` — **blocking** | **SI-008** |
 | `Resolved` | — |
 | `Withdrawn` | — |
+
+**SI-008 is the only issue that blocks work.** Version negotiation (§23.5)
+cannot be implemented until the on-wire representation of a `MAJOR.MINOR`
+version is defined. Nothing in Milestones A or B depends on it; a v1.0 release
+does, since §29.13's compliance checklist includes version negotiation.
