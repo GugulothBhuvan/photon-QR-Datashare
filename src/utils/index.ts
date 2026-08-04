@@ -13,4 +13,4 @@
  * Placeholder barrel — the error model moved to @core/errors.
  */
 
-export {};
+export { bytesToHex, isHex } from './hex';
