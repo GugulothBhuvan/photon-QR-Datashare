@@ -97,7 +97,7 @@ contract.
 | A2-02 | `Transfer` carries identity and shape with **no state machine**. | §12 Transfer Protocol and §26 Transfer FSM were both out of scope. Inventing states would create a second, unauthoritative definition of protocol behaviour. | `src/types/transfer.ts` | TransferManager, against §12 and §26.7 |
 | A2-03 | The domain packet kinds are Manifest, Data and Recovery. | §11.4 enumerates packet types formally and was unread. The three were attested by §8.5 and §10.10, which had been read. | `src/types/packet.ts` | Verified — see §5 |
 | A2-04 | `ProtocolVersion` is a single number, later bounded to 0–255 by PACKET_SPEC §5. | §3.29 defines it as a numeric identifier. §23.3 defines the version *format* and was unread; if it is structured (major/minor), this type changes. | `src/types/ids.ts` | Version negotiation, against §23.3 |
-| A2-05 | Compression method, encryption method, recovery method and integrity algorithm are **opaque strings**, not enumerations. `'NONE'` is the only named constant. | §15, §18, §19 and §20 name the permitted values and were all unread. Enumerating them from guesswork would have invented protocol values. | `src/types/manifest.ts` | PRO-005 (§15), and the compression, encryption and integrity phases (§18, §19, §20) |
+| A2-05 | Compression method, encryption method and integrity algorithm are **opaque strings**, not enumerations. `'NONE'` is the only named constant. **Recovery method is now enumerated** — see §5. | §15, §18, §19 and §20 name the permitted values and were all unread. Enumerating them from guesswork would have invented protocol values. | `src/types/manifest.ts` | PRO-005 (§15), and the compression, encryption and integrity phases (§18, §19, §20) |
 | A2-06 | A manifest packet has no `fileId`; a data packet must have one. | §3.13 places a packet index within a *file* transfer, and a manifest describes the transfer rather than one file. §11 was unread. | `src/types/packet.ts` | Verified — see §5 |
 | A2-07 | A zero-byte file and a zero-packet manifest entry are legal. | §3.8 admits any byte sequence as a file. No section read said otherwise. | `src/types/fileMetadata.ts`, `src/types/manifest.ts` | Verified — see §5 |
 | A2-08 | The manifest **derives** `fileCount`, `totalSize` and `totalPacketCount` from its entries rather than accepting them as input. | §10.5 lists them as contents and §10.13 makes an inconsistent count grounds for rejection. Deriving them makes an inconsistent manifest unconstructable. Receiver-side validation of a manifest that arrived over the wire (§10.7) is a separate concern. | `src/types/manifest.ts` | Verified — see §5 |
@@ -151,6 +151,14 @@ contract.
 | A7-03 | Resume is split into `requestResume` (validate, Paused → Resuming) and `completeResume` (Resuming → Active). | §14.3 lists "Resume Requested", "Session Validation" and "Continue Transfer" as distinct steps, but §14 gives no API. Splitting them lets a caller prepare between validation and continuation; collapsing them would make the `Resuming` state unobservable. | `src/core/resume/resumeEngine.ts` | Against §26.8 Resume FSM |
 | A7-04 | On resume failure the engine terminates the session **and** releases packet storage, then reports. It does not set a `Failed` transfer state. | §14.7 and §14.13 require the session to terminate and temporary packet storage to be released. §14.13 also says "the transfer SHALL enter the Failed state" — but Transfer has no state machine yet (A2-02), so that part is not implemented. | `src/core/resume/resumeEngine.ts` | TransferManager, against §12 and §26.7 |
 
+## 3.7 Recovery Engine (PRO-005)
+
+| ID | Assumption | Why necessary | Where | Verify in |
+| --- | --- | --- | --- | --- |
+| A8-01 | A recovery packet (`PacketType.Recovery`) is reported as **unusable** rather than stored. | §15.7 says recovery packets MAY exist and SHALL never replace original data packets, and their content is parity for forward error correction — which §15.6 Strategy 2 marks OPTIONAL in OSP/1.0 and not implemented. Storing one at a data index would violate §15.7; silently dropping it would hide the fact that a peer is using a strategy we cannot perform. | `src/core/recovery/recoveryEngine.ts` | When forward error correction is implemented, against §15.6 and PACKET_SPEC §9.4 |
+| A8-02 | `RecoveryCondition` is an enumeration the caller supplies; the engine does not detect which condition occurred. | §15.4 lists recoverable and non-recoverable conditions but gives no mechanism for classifying an observed failure — and several ("dropped optical frames", "camera frame loss") are transport observations the protocol layer cannot make without violating §15.14.7. | `src/core/recovery/recoveryEngine.ts` | Camera and transport phases |
+| A8-03 | The manifest's `recoveryMethod` string is matched against the three §15.6 strategy names; an unrecognised value yields no strategy rather than an error. | §10.5 carries a recovery method and §15.6 names three strategies, but neither states the wire spelling. §24.11 Unknown Algorithms was unread. | `src/core/recovery/recoveryEngine.ts` | Against §24.11 |
+
 ---
 
 # 4. Assumptions By Verifying Phase
@@ -159,7 +167,9 @@ A phase should check these before building on them.
 
 | Phase / work | Entries to verify |
 | --- | --- |
-| PRO-005 RecoveryEngine | A2-05 (§15) |
+| Forward error correction | A8-01 |
+| Camera / transport phases | A8-02 |
+| Unknown algorithms (§24.11) | A8-03 |
 | TransferManager | A2-02, A4-05 |
 | Packet ordering (§13) | A3-04 |
 | Reconstruction (§13, §16) | A6-01, A5-05 |
@@ -187,6 +197,7 @@ A phase should check these before building on them.
 | A4-02 | `Handshake → Waiting` is legal: a failed handshake need not end the session. | **Contradicted and removed.** §26.4's allowed-transition list does not contain it, and no other section supports it. The edge was an inference from §8.8's description of the sender waiting for receivers. A handshake that fails now either retries within `Handshake` or expires. |
 | A2-07 | A zero-byte file and a zero-packet manifest entry are legal. | **Confirmed** by PRO-002. §10.7 and §10.13 impose no minimum size or packet count; `packetsFor(0, n)` is 0 and a file declaring zero packets is complete. |
 | A2-08 | The manifest derives its totals rather than accepting them. | **Confirmed** by PRO-002 against §10.7.5 and §10.13. Deriving on creation and *checking* on parse turned out to be the right split: a manifest built locally cannot be inconsistent, and one that arrived is checked against exactly the §10.7.5 rule. |
+| A2-05 (recovery method only) | Recovery method is an opaque string. | **Partly resolved** by PRO-005. §15.6 names three strategies — Natural Repetition (the OSP/1.0 default), Forward Error Correction (OPTIONAL, future) and Selective Recovery (not part of OSP/1.0) — so `RecoveryStrategy` is now an enumeration in `src/core/recovery/recoveryEngine.ts`. The manifest field stays a string, because §15.6 does not give the wire spelling (A8-03). Compression, encryption and integrity algorithms remain opaque; §18, §19 and §20 are still unread. |
 | A2-03 | The domain packet kinds are Manifest, Data and Recovery. | **Confirmed** by PRO-003 against §11.4, which defines exactly those three logical types plus a rule for future ones (see A6-02). No change needed. |
 | A2-06 | A manifest packet has no `fileId`; a data packet must have one. | **Confirmed for data packets** by §11.5, and PRO-003 now enforces it: a data packet with no file is rejected as `MISSING_FILE`. §11.5's literal text would also require a manifest packet to name one file, which is impossible — see A6-01. |
 | A3-03 | The nil UUID in the header's File ID field means "belongs to no single file". | **Retained.** §11.5 does not name a sentinel, and §11.4 with §10.11 confirm a manifest packet cannot belong to one file. The same key is now used by the packet registry, so encoding and storage agree. Still to be checked against PACKET_SPEC §9.2. |
