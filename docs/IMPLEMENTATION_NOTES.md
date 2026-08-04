@@ -151,6 +151,16 @@ contract.
 | A7-03 | Resume is split into `requestResume` (validate, Paused → Resuming) and `completeResume` (Resuming → Active). | §14.3 lists "Resume Requested", "Session Validation" and "Continue Transfer" as distinct steps, but §14 gives no API. Splitting them lets a caller prepare between validation and continuation; collapsing them would make the `Resuming` state unobservable. | `src/core/resume/resumeEngine.ts` | Against §26.8 Resume FSM |
 | A7-04 | On resume failure the engine terminates the session **and** releases packet storage, then reports. It does not set a `Failed` transfer state. | §14.7 and §14.13 require the session to terminate and temporary packet storage to be released. §14.13 also says "the transfer SHALL enter the Failed state" — but Transfer has no state machine yet (A2-02), so that part is not implemented. | `src/core/resume/resumeEngine.ts` | TransferManager, against §12 and §26.7 |
 
+## 3.8 QR Transport (Phase 5)
+
+| ID | Assumption | Why necessary | Where | Verify in |
+| --- | --- | --- | --- | --- |
+| A9-01 | The adaptation policy — a 20-frame window, degrade below 80% success, improve above 98%, one ladder step at a time — is chosen, not specified. | QR_SPEC §10 permits adapting frame duration, version and error correction but gives no thresholds, window or algorithm. PROTOCOL_SPEC §17 Adaptive Transport was not read. A policy reacting per frame oscillates, so some window had to be picked. | `src/qr/adaptiveTiming.ts` | Against PROTOCOL_SPEC §17 |
+| A9-02 | Degrading moves rate **and** error correction one step each; improving moves only rate. | §10 lists both as adjustable without saying how they relate. Raising throughput is cheaply reversible; lowering error correction gives up margin that was doing work. | `src/qr/adaptiveTiming.ts` | Against PROTOCOL_SPEC §17.7, §17.8 |
+| A9-03 | The quiet zone is 4 modules, and narrower is refused. | §13 requires the quiet zone "preserved" without giving a width. Four is the ISO/IEC 18004 requirement, and narrowing it is the commonest cause of codes that scan in testing and fail in the hand. | `src/qr/qrRenderer.ts` | Any phase reading QR_SPEC §16 or Appendix A |
+| A9-04 | Module size is floored to a whole unit, so a rendered code may be smaller than the requested target. | §13 forbids distortion, and fractional module sizes produce seams and blurred edges. §13 gives no sizing rule. | `src/qr/qrRenderer.ts` | UI phase, against §11 |
+| A9-05 | Maximum byte capacities per level (2953 / 2331 / 1663 / 1273) are hard-coded. | §6 leaves supported versions implementation-defined and gives no capacity table. These are the ISO/IEC 18004 values for version 40, not invented ones, and are needed so the transport can choose a packet size instead of discovering the limit by failing. | `src/qr/qrEncoder.ts` | Any phase reading QR_SPEC Appendix A |
+
 ## 3.7 Recovery Engine (PRO-005)
 
 | ID | Assumption | Why necessary | Where | Verify in |
@@ -180,7 +190,8 @@ A phase should check these before building on them.
 | Compression / Encryption (§18, §19) | A2-05, A5-04 |
 | Integrity / Security (§20, P11) | A3-01, A3-02, A2-05, A5-02, A3-05 |
 | Compatibility rules (§24) | A5-03, A6-02 |
-| Adaptive transport (§17) | A6-03 |
+| Adaptive transport (§17) | A6-03, A9-01, A9-02 |
+| QR rendering and capacity (QR_SPEC §16, Appendix A) | A9-03, A9-04, A9-05 |
 | Version negotiation (§23) | A2-04 |
 | Timing (§22) | A4-03 |
 | Codec wiring | A6-04 |
@@ -206,9 +217,17 @@ A phase should check these before building on them.
 
 # 6. What Does Not Belong Here
 
-- Decisions made **with** the governing specification in hand. Those belong in
-  code comments citing the section, not here.
-- Architectural choices that no specification governs — dependency injection
-  style, module layout. Those belong in `ARCHITECTURE_GRAPH.md` or an ADR under
-  `docs/decisions/`.
-- Known defects. Those are defects, not assumptions.
+This document tracks **implementation assumptions only** — decisions taken
+because a governing section had not been read yet.
+
+| Not this | Goes here instead |
+| --- | --- |
+| A defect in a specification: internally inconsistent, contradicts another document, requires behaviour with no mechanism, omits a needed value | `docs/SPEC_ISSUES.md` |
+| A decision made **with** the governing specification in hand | A code comment citing the section |
+| An architectural choice no specification governs — injection style, module layout | `ARCHITECTURE_GRAPH.md`, or an ADR under `docs/decisions/` |
+| A known bug | The defect tracker |
+
+The distinction between this file and `SPEC_ISSUES.md` is worth keeping sharp:
+an entry here says *"we had not read the rule yet"*, and an entry there says
+*"the rule is wrong"*. The first is resolved by reading; the second only by
+amending the specification.

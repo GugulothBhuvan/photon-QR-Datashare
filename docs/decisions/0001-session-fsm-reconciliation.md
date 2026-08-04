@@ -100,16 +100,11 @@ A4-02 contradicted and removed).
 
 ## Specification defects this exposes
 
-These are reported, not resolved. The specification is authoritative; where it
-is self-inconsistent, that is a defect worth fixing at the source.
+Four, recorded in `docs/SPEC_ISSUES.md` as **SI-001** (§26.4 omits `Resuming`),
+**SI-002** (§26.4's expiry edges contradict §8.9), **SI-003**
+(`STATE_MACHINES.md` §6 contradicts PROTOCOL_SPEC), and **SI-004** (§4.6 gives
+keyword precedence but not document precedence).
 
-1. **§26.4 omits `Resuming`, which §8.3 and §8.8 define.** Either §26.4 should
-   list `Paused → Resuming → Active`, or §8.8 should drop the state.
-2. **§26.4's expiry edges contradict §8.9.** §26.4 should either list expiry
-   from every live state or state that it shows only the principal paths.
-3. **STATE_MACHINES.md §6 contradicts PROTOCOL_SPEC on two points** — the
-   missing `Waiting` state and the "Resumed" spelling. It should be regenerated
-   from §26.4.
-4. **§4.6 gives keyword precedence but not document precedence.** The rule that
-   PROTOCOL_SPEC outranks the other specifications lives only in AGENTS.md §3,
-   which is a contributor guide rather than a specification.
+The specification remains authoritative. If it is amended in a way that
+contradicts this decision, this ADR is superseded and the implementation
+changes.

@@ -27,14 +27,29 @@ const SERVICE_LAYER = ['@services/*', '@/services/*'];
 const CORE_LAYER = ['@core/*', '@/core/*'];
 
 /**
- * The core layer minus its error model.
+ * The core layer minus its two shared declarations.
  *
- * Core owns the standardized errors (docs/API_SPEC.md §12), and adapters are
- * required to throw them rather than leaking platform exceptions. Everything
- * else in core stays out of reach. Negations override earlier patterns, so the
- * order here matters.
+ * Adapters may reach exactly two things inside core, and nothing else:
+ *
+ * - `@core/errors` — adapters are required to throw standardized errors rather
+ *   than leak platform exceptions (docs/API_SPEC.md §12).
+ * - `@core/contracts` — pure interface declarations with no implementation.
+ *   They exist to be depended upon from any layer; that is the whole point of
+ *   declaring them separately from the modules that use them. An adapter
+ *   taking a `Clock`, or implementing a `PacketCodec`, is the intended
+ *   direction, not a violation.
+ *
+ * Everything else in core stays out of reach. Negations override earlier
+ * patterns, so the order here matters.
  */
-const CORE_LAYER_EXCEPT_ERRORS = ['@core/*', '!@core/errors', '@/core/*', '!@/core/errors'];
+const CORE_LAYER_EXCEPT_SHARED = [
+  '@core/*',
+  '!@core/errors',
+  '!@core/contracts',
+  '@/core/*',
+  '!@/core/errors',
+  '!@/core/contracts',
+];
 const REPOSITORY_LAYER = ['@repositories/*', '@/repositories/*'];
 const ADAPTER_LAYER = ['@storage/*', '@camera/*', '@qr/*', '@/storage/*', '@/camera/*', '@/qr/*'];
 
@@ -188,14 +203,14 @@ module.exports = [
 
   {
     // Adapters isolate platform APIs; they must stay free of business logic.
-    files: ['src/storage/**/*.ts', 'src/camera/**/*.ts'],
+    files: ['src/storage/**/*.ts', 'src/camera/**/*.ts', 'src/qr/**/*.ts'],
     rules: {
       'no-restricted-imports': boundary('Adapters', [
         ...UI_LAYER,
         ...CONTROLLER_LAYER,
         ...SERVICE_LAYER,
         ...REPOSITORY_LAYER,
-        ...CORE_LAYER_EXCEPT_ERRORS,
+        ...CORE_LAYER_EXCEPT_SHARED,
       ]),
     },
   },
