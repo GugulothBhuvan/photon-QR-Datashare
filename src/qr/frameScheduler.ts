@@ -19,6 +19,8 @@
  */
 import { AppError, ErrorCode } from '@core/errors';
 
+import { QRSpeedPreference } from '@domain/settings';
+
 /**
  * Frame duration presets (QR_SPEC §9).
  *
@@ -38,6 +40,22 @@ export const FRAME_DURATION_MS: Readonly<Record<FrameRate, number>> = Object.fre
   [FrameRate.Balanced]: 200,
   [FrameRate.Reliable]: 350,
 });
+
+/**
+ * The frame rate a user speed preference asks for.
+ *
+ * `QRSpeedPreference` is declared as a preference rather than a timing, and its
+ * declaration places this mapping in the transport layer — which is here. The
+ * two vocabularies are deliberately different: a user asks for "slow", and slow
+ * is the *reliable* preset, because a longer-lived code is the one a struggling
+ * camera can read (§9).
+ */
+export const FRAME_RATE_FOR_PREFERENCE: Readonly<Record<QRSpeedPreference, FrameRate>> =
+  Object.freeze({
+    [QRSpeedPreference.Slow]: FrameRate.Reliable,
+    [QRSpeedPreference.Balanced]: FrameRate.Balanced,
+    [QRSpeedPreference.Fast]: FrameRate.Fast,
+  });
 
 /** Bounds on an adapted duration, so adaptation cannot produce an unusable rate. */
 export const MIN_FRAME_DURATION_MS = 16;

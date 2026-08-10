@@ -87,7 +87,7 @@ describe('createStore', () => {
 
     it('reports the previous slice value', () => {
       const store = createStore(initial);
-      const seen: Array<[number, number]> = [];
+      const seen: [number, number][] = [];
 
       store.select(
         (state) => state.count,

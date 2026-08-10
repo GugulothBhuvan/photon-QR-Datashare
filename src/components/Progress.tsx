@@ -39,6 +39,7 @@ export function ProgressBar({ value, label, showValue = true }: ProgressProps) {
 
   return (
     <View
+      accessible
       accessibilityRole="progressbar"
       accessibilityLabel={label ?? 'Progress'}
       accessibilityValue={{ min: 0, max: 100, now: percent }}
@@ -74,6 +75,7 @@ export function ProgressRing({ value, label, showValue = true }: ProgressProps) 
 
   return (
     <View
+      accessible
       accessibilityRole="progressbar"
       accessibilityLabel={label ?? 'Transfer progress'}
       accessibilityValue={{ min: 0, max: 100, now: percent }}

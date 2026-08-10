@@ -39,6 +39,7 @@ export {
 export {
   createFrameScheduler,
   FRAME_DURATION_MS,
+  FRAME_RATE_FOR_PREFERENCE,
   FrameRate,
   MAX_FRAME_DURATION_MS,
   MIN_FRAME_DURATION_MS,

@@ -116,6 +116,18 @@ module.exports = [
         'error',
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
       ],
+
+      /**
+       * Off deliberately.
+       *
+       * Every enumeration in this codebase is declared as a frozen object plus
+       * a type of the same name — the pattern chosen over `enum` because it
+       * erases to plain values. The rule flags each one, which is forty-odd
+       * warnings for an idiom that is used on purpose. An accidental
+       * redeclaration is still caught: TypeScript reports it as a duplicate
+       * identifier, which fails `npm run typecheck` outright.
+       */
+      '@typescript-eslint/no-redeclare': 'off',
     },
   },
 

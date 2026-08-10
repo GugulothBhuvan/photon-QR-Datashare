@@ -1,35 +1,23 @@
 /**
- * Index route.
+ * Home route (UI-002) — UI_SPEC §5.1.
  *
- * Placeholder shell that proves the Expo Router entry point builds. The real
- * Home experience is specified in docs/UI_SPEC.md and implemented in
- * Phase 8 (UI-002) as a screen under src/screens.
+ * A route binds a screen to navigation and nothing else. The screen itself
+ * holds no navigator, so it can be rendered in a test without one.
  */
-import { StyleSheet, Text, View } from 'react-native';
+import { useRouter } from 'expo-router';
 
-export default function IndexRoute() {
+import { HomeScreen } from '@screens/index';
+import { Route } from '@navigation/routes';
+
+export default function HomeRoute() {
+  const router = useRouter();
+
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>photon</Text>
-      <Text style={styles.subtitle}>Offline optical file transfer</Text>
-    </View>
+    <HomeScreen
+      onSend={() => router.push(Route.Send)}
+      onReceive={() => router.push(Route.Receive)}
+      onHistory={() => router.push(Route.History)}
+      onSettings={() => router.push(Route.Settings)}
+    />
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    alignItems: 'center',
-    flex: 1,
-    justifyContent: 'center',
-    padding: 24,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: '600',
-  },
-  subtitle: {
-    fontSize: 15,
-    marginTop: 8,
-    opacity: 0.7,
-  },
-});

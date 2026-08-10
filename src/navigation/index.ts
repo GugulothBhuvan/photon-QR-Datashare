@@ -1,19 +1,12 @@
 /**
  * navigation/ — UI layer
  *
- * Owns: Route definitions, typed route helpers and navigation utilities.
+ * Route definitions, typed route helpers and navigation utilities.
  *
- * May depend on:
- *   - Expo Router
- *   - Constants (@constants/*)
+ * May depend on: Expo Router, constants.
+ * Must NOT depend on: services, core protocol, repositories.
  *
- * Must NOT depend on:
- *   - Services
- *   - Core protocol
- *   - Repositories
- *
- * Authority: planning/DEPENDENCIES.md and docs/ARCHITECTURE.md.
- * Placeholder barrel — populated from Phase 1 onwards.
+ * Authority: docs/UI_SPEC.md §3, §4.
  */
 
-export {};
+export { isFullScreen, isPrimary, PRIMARY_ROUTES, Route, ROUTE_TITLES } from './routes';

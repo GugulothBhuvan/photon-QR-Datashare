@@ -91,7 +91,12 @@ export const Duration = {
 export const Shadow = {
   none: { elevation: 0, shadowOpacity: 0, shadowRadius: 0, shadowOffset: { width: 0, height: 0 } },
   sm: { elevation: 2, shadowOpacity: 0.12, shadowRadius: 4, shadowOffset: { width: 0, height: 1 } },
-  md: { elevation: 6, shadowOpacity: 0.16, shadowRadius: 12, shadowOffset: { width: 0, height: 4 } },
+  md: {
+    elevation: 6,
+    shadowOpacity: 0.16,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+  },
 } as const;
 
 /**

@@ -9,6 +9,7 @@
  * references protocol state rather than duplicating it
  * (docs/ARCHITECTURE.md §6.6, invariant §6.14.4).
  */
+import type { SessionId, TransferId } from '@domain/ids';
 
 /**
  * Every event name in the system.
@@ -34,8 +35,6 @@ export type AppEvent = (typeof AppEvent)[keyof typeof AppEvent];
  * so event consumers need only one import, but there is a single definition.
  */
 export type { SessionId, TransferId } from '@domain/ids';
-
-import type { SessionId, TransferId } from '@domain/ids';
 
 export interface SessionCreatedPayload {
   readonly sessionId: SessionId;

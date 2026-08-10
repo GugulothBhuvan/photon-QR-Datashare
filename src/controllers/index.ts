@@ -6,8 +6,30 @@
  *
  * Purpose, ownership, dependency rules and public exports: see ./README.md.
  * Interfaces are defined by docs/API_SPEC.md.
- *
- * Placeholder barrel — populated from Phase 8 onwards.
  */
 
-export {};
+export {
+  createSendController,
+  DEFAULT_PACKET_SIZE,
+  initialSendState,
+  SendStage,
+  type SendController,
+  type SendControllerOptions,
+  type SendState,
+} from './sendController';
+
+export {
+  createReceiveController,
+  initialReceiveState,
+  ReceiveStage,
+  type ReceiveController,
+  type ReceiveControllerOptions,
+  type ReceiveState,
+} from './receiveController';
+
+export {
+  createSettingsController,
+  type SettingsController,
+  type SettingsControllerOptions,
+  type SettingsState,
+} from './settingsController';

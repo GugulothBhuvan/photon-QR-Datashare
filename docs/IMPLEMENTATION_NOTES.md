@@ -188,6 +188,21 @@ contract.
 | A8-02 | `RecoveryCondition` is an enumeration the caller supplies; the engine does not detect which condition occurred. | §15.4 lists recoverable and non-recoverable conditions but gives no mechanism for classifying an observed failure — and several ("dropped optical frames", "camera frame loss") are transport observations the protocol layer cannot make without violating §15.14.7. | `src/core/recovery/recoveryEngine.ts` | Camera and transport phases |
 | A8-03 | The manifest's `recoveryMethod` string is matched against the three §15.6 strategy names; an unrecognised value yields no strategy rather than an error. | §10.5 carries a recovery method and §15.6 names three strategies, but neither states the wire spelling. §24.11 Unknown Algorithms was unread. | `src/core/recovery/recoveryEngine.ts` | Against §24.11 |
 
+## 3.11 User Interface (Phase 8)
+
+These are **capability gaps**, not readings of the specification. Each names a
+platform integration the UI is built to accept but does not yet have. The
+distinction matters: none of them is a guess about what a specification says,
+so none can be contradicted by reading one. They are recorded here because the
+screens above them are complete and would otherwise look finished.
+
+| ID | Assumption | Why necessary | Where | Verify in |
+| --- | --- | --- | --- | --- |
+| A12-01 | No device camera adapter exists. Receive runs against the `CameraAdapter` contract only, and the camera preview on Receive is a styled placeholder rather than a live surface. | Streaming camera frames into JavaScript needs a native module and a development build; Expo Go cannot do it. The contract is frozen (docs/CONTRACTS.md), so the adapter is the only missing piece — the controller, service, decoder and packet pipeline are all real and exercised by `createMemoryCamera`. | `src/screens/ReceiveScreen.tsx`, `src/config/appComposition.ts` | Device integration work |
+| A12-02 | No file picker. `SendScreen` takes `onPickFiles` as an injected callback and the route supplies one that does nothing. | Picking a file is a platform capability, not a protocol one. Injecting it keeps the screen testable and means adding `expo-document-picker` changes one route, not the screen. | `src/screens/SendScreen.tsx`, `app/send.tsx` | Device integration work |
+| A12-03 | No history repository. `HistoryScreen` renders entries it is given; nothing persists a completed transfer. | UI_SPEC §5.5 specifies what history *shows*; no read section says what is stored, for how long, or whether history survives reinstalling. Inventing a retention policy would be a product decision made in a repository. | `src/screens/HistoryScreen.tsx`, `app/history.tsx` | A storage phase, against whichever section defines transfer records |
+| A12-04 | The composition root hashes files with a non-cryptographic placeholder, `PHOTON-PLACEHOLDER-32` (FNV-1a). | §20 owns integrity algorithms and is unread. The manifest must name *some* algorithm and the receiver must verify against it, so a placeholder that is honestly named is safer than a real-sounding one: `verifyFile` reports an unsupported algorithm distinctly (A11-04), and nothing can mistake this for SHA-256. | `src/config/appComposition.ts` | Security phase (§20) |
+
 ---
 
 # 4. Assumptions By Verifying Phase
@@ -211,6 +226,9 @@ A phase should check these before building on them.
 | Compatibility rules (§24) | A5-03, A6-02 |
 | Adaptive transport (§17) | A6-03, A9-01, A9-02 |
 | QR rendering and capacity (QR_SPEC §16, Appendix A) | A9-03, A9-04, A9-05 |
+| Device integration (camera, file picker) | A12-01, A12-02 |
+| Storage of transfer records | A12-03 |
+| Integrity / Security (§20) — placeholder digest | A12-04 |
 | Device camera adapter | A10-01 |
 | Performance (§16, Phase 10) | A10-02, A10-03 |
 | Transport validation (QR_SPEC §18) | A10-05 |
