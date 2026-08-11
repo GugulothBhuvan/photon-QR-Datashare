@@ -8,7 +8,10 @@
  * actually ships, which are recorded in ADR-0002 and ADR-0003. Keeping the list
  * next to those decisions is what stops it going stale.
  */
-import { Button, Card, ListItem, Screen, Text } from '@components/index';
+import { StyleSheet, View } from 'react-native';
+
+import { Button, Card, ListItem, Logo, Screen, Text } from '@components/index';
+import { Spacing } from '@constants/tokens';
 
 /**
  * One line of the §29.13 compliance checklist.
@@ -81,6 +84,9 @@ export function AboutScreen({
   return (
     <Screen title="About" subtitle="Offline optical file transfer">
       <Card>
+        <View style={aboutStyles.mark}>
+          <Logo size={64} />
+        </View>
         <ListItem title="Application version" trailing={appVersion} />
         <ListItem title="Protocol version" trailing={`OSP/${protocolVersion}`} />
       </Card>
@@ -140,3 +146,10 @@ export function AboutScreen({
     </Screen>
   );
 }
+
+const aboutStyles = StyleSheet.create({
+  mark: {
+    alignItems: 'center',
+    paddingVertical: Spacing.md,
+  },
+});

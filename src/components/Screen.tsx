@@ -7,6 +7,7 @@
  * consistency — a shared shell is how that consistency holds without each
  * screen repeating it.
  */
+import type { ReactNode } from 'react';
 import { ScrollView, StyleSheet, View, type ViewProps } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -20,12 +21,20 @@ export interface ScreenProps extends ViewProps {
   readonly subtitle?: string;
   /** Set false for screens that manage their own layout, such as a camera view. */
   readonly scrollable?: boolean;
+  /**
+   * Rendered in place of the prompt marker, beside the title.
+   *
+   * Home passes the logo here rather than adding a separate banner, which
+   * would print the product name twice on one screen.
+   */
+  readonly leading?: ReactNode;
 }
 
 export function Screen({
   title,
   subtitle,
   scrollable = true,
+  leading,
   children,
   style,
   ...rest
@@ -43,9 +52,11 @@ export function Screen({
             a screen reader announcing "black rectangle photon" would be strictly
             worse than announcing nothing.
           */}
-          <Text variant="title" importantForAccessibility="no" accessibilityElementsHidden>
-            ▮
-          </Text>
+          {leading ?? (
+            <Text variant="title" importantForAccessibility="no" accessibilityElementsHidden>
+              ▮
+            </Text>
+          )}
           <Text variant="title" accessibilityRole="header">
             {title}
           </Text>

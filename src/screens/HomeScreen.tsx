@@ -9,7 +9,7 @@
  */
 import { StyleSheet, View } from 'react-native';
 
-import { Button, Card, EmptyState, ListItem, Screen, Text } from '@components/index';
+import { Button, Card, EmptyState, ListItem, Logo, Screen, Text } from '@components/index';
 import { Spacing } from '@constants/tokens';
 
 export interface RecentTransfer {
@@ -39,7 +39,11 @@ export function HomeScreen({
   status = 'Ready',
 }: HomeScreenProps) {
   return (
-    <Screen title="photon" subtitle="Offline file transfer, no network required">
+    <Screen
+      title="photon"
+      subtitle="Offline optical transfer · OSP/1.0"
+      leading={<Logo size={28} />}
+    >
       {/* §5.1 status indicator */}
       <Card>
         <View style={styles.status}>

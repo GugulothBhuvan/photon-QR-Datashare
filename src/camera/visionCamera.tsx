@@ -25,6 +25,7 @@ import {
 // obtain the worklet runtime that `useFrameOutput` runs `onFrame` on. Without
 // it the frame stream never starts.
 import 'react-native-vision-camera-worklets';
+import { scheduleOnRN } from 'react-native-worklets';
 
 import { CameraPermission } from './cameraPort';
 import { toCameraFrame, type DeviceCamera } from './deviceCamera';
@@ -59,7 +60,7 @@ export interface CameraSourceProps {
  * Mount this once, inside a receive screen. Unmounting it tears the session
  * down — VisionCamera releases the device with the component.
  */
-export function CameraSource({ camera, targetWidth = 1280, isActive = true }: CameraSourceProps) {
+export function CameraSource({ camera, targetWidth = 960, isActive = true }: CameraSourceProps) {
   const device = useCameraDevice('back');
   const permission = useCameraPermission();
 
@@ -90,14 +91,19 @@ export function CameraSource({ camera, targetWidth = 1280, isActive = true }: Ca
    * it holding a stale one.
    */
   const deliverFrame = useCallback(
-    (
-      buffer: ArrayBuffer,
-      width: number,
-      height: number,
-      timestamp: number,
-      bytesPerRow: number,
-    ): void => {
-      camera.deliver(toCameraFrame(buffer, width, height, timestamp, bytesPerRow));
+    (pixels: Uint8Array, width: number, height: number, bytesPerRow: number): void => {
+      camera.deliver(
+        toCameraFrame(
+          pixels.buffer as ArrayBuffer,
+          width,
+          height,
+          // The capture timestamp is the camera thread's clock, which is not
+          // the JS thread's. A receiver only uses this for ordering within a
+          // session, so a JS-side reading is the consistent one.
+          Date.now(),
+          bytesPerRow,
+        ),
+      );
     },
     [camera],
   );
@@ -111,6 +117,11 @@ export function CameraSource({ camera, targetWidth = 1280, isActive = true }: Ca
     // §12 asks the receiver to decode as quickly as practical, and a backlog of
     // stale frames helps nobody: a QR frame that has already been replaced on
     // the sender's screen is not worth decoding.
+    //
+    // This is also the throttle. Every delivered frame is copied and crosses a
+    // thread boundary, and dropping while busy means the pipeline self-limits
+    // to whatever decoding can actually keep up with — no timer needed, and no
+    // mutable state in a worklet that cannot hold any.
     dropFramesWhileBusy: true,
 
     onFrame(frame: Frame) {
@@ -121,13 +132,17 @@ export function CameraSource({ camera, targetWidth = 1280, isActive = true }: Ca
           return;
         }
 
-        deliverFrame(
-          frame.getPixelBuffer(),
-          frame.width,
-          frame.height,
-          frame.timestamp,
-          frame.bytesPerRow,
-        );
+        // **Copied before dispose, deliberately.** `getPixelBuffer` does not
+        // copy — it hands back a view of a buffer the camera owns, and the
+        // `finally` below invalidates it. Marshalling the view to JavaScript
+        // would deliver bytes that are already gone.
+        const copy = new Uint8Array(frame.getPixelBuffer()).slice();
+
+        // **Crossed to the JS thread explicitly.** `onFrame` is a worklet on
+        // the camera thread; calling a JavaScript function from it directly
+        // does nothing on the JS side. That was why the receiver saw no frames
+        // at all: the pipeline was correct and nothing was ever handed to it.
+        scheduleOnRN(deliverFrame, copy, frame.width, frame.height, frame.bytesPerRow);
       } finally {
         // Required: an undisposed frame stalls the camera pipeline.
         frame.dispose();

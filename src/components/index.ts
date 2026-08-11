@@ -27,3 +27,5 @@ export {
 
 export { Text, type TextProps } from './Text';
 export { ThemeProvider, useTheme, type Theme, type ThemeSetting } from './ThemeProvider';
+
+export { Logo, LOGO_AMBER, type LogoProps } from './Logo';
