@@ -17,6 +17,7 @@ import { createReceiveController, ReceiveStage } from '@controllers/receiveContr
 import { createManifestManager } from '@core/manifest/manifestManager';
 import { createPacketManager } from '@core/packet/packetManager';
 import { createReceiveService } from '@services/receiveService';
+import { createDisabledCipher } from '@security/cipher';
 import type { IntegrityVerifier } from '@core/contracts';
 import { sessionId } from '@domain/ids';
 
@@ -35,6 +36,7 @@ function build(camera: CameraAdapter) {
 
   const receives = createReceiveService({
     camera,
+    cipher: createDisabledCipher(),
     decoder: createQrDecoder(),
     packets,
     manifests,
@@ -208,6 +210,7 @@ describe('the receive service directly', () => {
     const camera = createMemoryCamera();
     const receives = createReceiveService({
       camera,
+      cipher: createDisabledCipher(),
       decoder: createQrDecoder(),
       packets: createPacketManager(),
       manifests: createManifestManager(),

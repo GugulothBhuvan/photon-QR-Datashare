@@ -370,14 +370,62 @@ little.
 
 ---
 
+## SI-012 — Encryption requires a key exchange that no document defines
+
+| | |
+| --- | --- |
+| **Document** | `PROTOCOL_SPEC.md`, with `SECURITY.md` |
+| **Section** | §19.7 Key Management, §19.12 Encryption Negotiation, with SECURITY.md §8 |
+| **Status** | `Open` — blocking for encryption only |
+
+**Description.** The two documents defer to each other and neither defines a
+mechanism.
+
+- §19.7: "The Encryption Rules define how encryption is used but do not
+  prescribe a specific key exchange mechanism. […] Key generation, exchange, and
+  storage are specified in **SECURITY.md**."
+- SECURITY.md §8: key generation, storage and destruction are the application's
+  responsibility. It specifies no exchange.
+
+§19.7 additionally requires that "the Session SHALL establish a shared
+encryption context before Data Packet transmission begins" and §19.12 requires
+encryption to be negotiated during the Handshake — but no section defines a
+handshake message that could carry a key agreement, and §7's handshake
+description contains no such field.
+
+**Impact.** Encryption cannot be implemented interoperably. The optical channel
+is one way: two devices cannot agree a key over it without a defined mechanism,
+and any mechanism chosen here would be an invented protocol that no other
+implementation could match. §19.16.5 requires parameters to be negotiated before
+the transfer begins, which is exactly the step that has no definition.
+
+This does **not** block a compliant OSP/1.0 implementation: §19.1 and
+SECURITY.md §5 both make encryption optional.
+
+**Deliberately not implemented.** The seam is built and the refusal is real —
+`PayloadCipher` fixes §19.5's scope structurally, the pipeline order of §19.3 is
+enforced by where the calls sit, and a manifest naming an algorithm this build
+cannot perform is rejected rather than treated as plain text (§19.14). What is
+absent is a cipher, and it is absent because there is nothing to key it with.
+
+**Suggested resolution.** Specify the exchange. Over a one-way optical channel
+the realistic options are a pre-shared secret entered by the user, a key
+displayed as a QR code and scanned by the sender before the transfer (which
+needs the return path SI-010 also wants), or an out-of-band channel named
+explicitly. Whichever is chosen, §19.12's handshake needs a field to carry the
+result, and SECURITY.md §8 should say which party generates the key.
+
+---
+
 # 4. Index By Document
 
 | Document | Issues |
 | --- | --- |
-| `PROTOCOL_SPEC.md` | SI-001, SI-002, SI-004, SI-005, SI-006, SI-007, SI-009 |
+| `PROTOCOL_SPEC.md` | SI-001, SI-002, SI-004, SI-005, SI-006, SI-007, SI-009, SI-010, SI-012 |
 | `STATE_MACHINES.md` | SI-003 |
 | `PACKET_SPEC.md` | SI-008 (jointly with PROTOCOL_SPEC) |
 | `TRD.md` | SI-010 (jointly with PROTOCOL_SPEC), SI-011 (jointly with IMPLEMENTATION_PLAN) |
+| `SECURITY.md` | SI-012 (jointly with PROTOCOL_SPEC) |
 | `planning/IMPLEMENTATION_PLAN.md` | SI-011 |
 
 # 5. Index By Status
@@ -386,6 +434,7 @@ little.
 | --- | --- |
 | `Working` | SI-001, SI-002, SI-005 |
 | `Open` | SI-003, SI-004, SI-006, SI-007, SI-009, SI-010, SI-011 |
+| `Open` — blocking for encryption | SI-012 |
 | `Open` — **blocking** | **SI-008** |
 | `Resolved` | — |
 | `Withdrawn` | — |

@@ -54,6 +54,16 @@ const REPOSITORY_LAYER = ['@repositories/*', '@/repositories/*'];
 const ADAPTER_LAYER = ['@storage/*', '@camera/*', '@qr/*', '@/storage/*', '@/camera/*', '@/qr/*'];
 
 /**
+ * Cryptographic implementations.
+ *
+ * A separate group from the adapters because the rule about it is different:
+ * nothing above the composition root may reach it. Every layer talks to
+ * `IntegrityVerifier`, and the only place that names a concrete algorithm is
+ * where the graph is wired.
+ */
+const SECURITY_LAYER = ['@security/*', '@/security/*'];
+
+/**
  * Builds a `no-restricted-imports` rule entry for a layer.
  *
  * @param {string} layer Human readable layer name, used in the error message.
@@ -143,6 +153,7 @@ module.exports = [
         ...SERVICE_LAYER,
         ...REPOSITORY_LAYER,
         ...ADAPTER_LAYER,
+        ...SECURITY_LAYER,
         '@workers/*',
         '@/workers/*',
       ]),
@@ -153,7 +164,11 @@ module.exports = [
     // Controllers coordinate services; they never touch React or platform APIs.
     files: ['src/controllers/**/*.ts'],
     rules: {
-      'no-restricted-imports': boundary('Controllers', [...PLATFORM, ...UI_LAYER]),
+      'no-restricted-imports': boundary('Controllers', [
+        ...PLATFORM,
+        ...UI_LAYER,
+        ...SECURITY_LAYER,
+      ]),
     },
   },
 
@@ -164,6 +179,7 @@ module.exports = [
       'no-restricted-imports': boundary('Services', [
         ...UI_LAYER,
         ...CONTROLLER_LAYER,
+        ...SECURITY_LAYER,
         'react',
         'react-dom',
         'react-native',
@@ -193,6 +209,9 @@ module.exports = [
         '@/telemetry/*',
         '@events/*',
         '@/events/*',
+        // §20 is reached through `IntegrityVerifier`. A manager that imported a
+        // hash would be choosing an algorithm, which is the manifest's job.
+        ...SECURITY_LAYER,
       ]),
     },
   },
@@ -222,6 +241,22 @@ module.exports = [
         ...CONTROLLER_LAYER,
         ...SERVICE_LAYER,
         ...REPOSITORY_LAYER,
+        ...CORE_LAYER_EXCEPT_SHARED,
+      ]),
+    },
+  },
+
+  {
+    // Cryptography stays free of everything but the contracts it implements.
+    files: ['src/security/**/*.ts'],
+    rules: {
+      'no-restricted-imports': boundary('Security', [
+        ...PLATFORM,
+        ...UI_LAYER,
+        ...CONTROLLER_LAYER,
+        ...SERVICE_LAYER,
+        ...REPOSITORY_LAYER,
+        ...ADAPTER_LAYER,
         ...CORE_LAYER_EXCEPT_SHARED,
       ]),
     },

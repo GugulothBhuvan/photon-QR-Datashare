@@ -18,7 +18,7 @@
  * It contains no protocol rules of its own. Every decision it makes is
  * delegated; what it adds is sequence.
  */
-import type { Clock, IdGenerator } from '@core/contracts';
+import type { Clock, IdGenerator, PayloadCipher } from '@core/contracts';
 import type { ManifestManager } from '@core/manifest/manifestManager';
 import type { PacketManager } from '@core/packet/packetManager';
 import { serializePacket, toWirePacket } from '@core/packet/serializer';
@@ -80,6 +80,15 @@ export interface PrepareOptions {
 
 export interface TransferServiceOptions {
   readonly sessions: SessionManager;
+  /**
+   * Encrypts each file's bytes before packetization (§19.3, §19.9).
+   *
+   * Injected rather than chosen here: §19.12 negotiates the algorithm, and a
+   * service that picked one would be making a security decision the manifest
+   * is supposed to record. Defaults to the disabled cipher at the composition
+   * root, which is OSP/1.0's `NONE`.
+   */
+  readonly cipher: PayloadCipher;
   readonly manifests: ManifestManager;
   readonly packets: PacketManager;
   readonly clock: Clock;
@@ -118,7 +127,7 @@ export interface TransferService {
 }
 
 export function createTransferService(options: TransferServiceOptions): TransferService {
-  const { sessions, manifests, packets, clock, idGenerator, protocolVersion } = options;
+  const { sessions, manifests, packets, clock, idGenerator, protocolVersion, cipher } = options;
   const encoder = createQrEncoder();
 
   return {
@@ -145,6 +154,9 @@ export function createTransferService(options: TransferServiceOptions): Transfer
         return {
           id,
           content: file.content,
+          // §19.16.9 and §20.9 put decryption *before* integrity verification,
+          // so the manifest's hash and size describe the **plaintext** file.
+          // Hashing ciphertext would make the receiver verify the wrong bytes.
           file: createFileMetadata({
             id,
             name: file.name,
@@ -183,10 +195,14 @@ export function createTransferService(options: TransferServiceOptions): Transfer
       const serialized: Uint8Array[] = [];
 
       for (const entry of described) {
+        // §19.3: encryption happens after compression and before packet
+        // generation. Compression is unimplemented (§18 unread), so this is the
+        // whole of the sender's transformation pipeline today, and the order is
+        // fixed by where this call sits rather than by a comment.
         const produced = packets.packetize({
           sessionId,
           fileId: entry.id,
-          stream: entry.content,
+          stream: cipher.encrypt(entry.content),
           packetSize,
         });
 

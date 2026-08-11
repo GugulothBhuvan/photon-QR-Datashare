@@ -27,3 +27,10 @@ export type { IdGenerator } from './idGenerator';
 export type { IntegrityVerifier } from './integrityVerifier';
 export type { Logger, LogContext, ProtocolLogger } from './logger';
 export type { PacketCodec, DecodedPacket } from './packetCodec';
+export type {
+  PayloadCipher,
+  DecryptResult,
+  DecryptSuccess,
+  DecryptRejection,
+} from './payloadCipher';
+export { DecryptFailure } from './payloadCipher';

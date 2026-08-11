@@ -212,6 +212,15 @@ screens above them are complete and would otherwise look finished.
 | A13-03 | `DUPLICATE_HEADROOM_RATIO` is 0.5. | §25 names duplicate rate as a monitored signal but defines no threshold. Exposed as a named constant rather than buried so the number is reviewable. | `src/qr/adaptiveMonitor.ts` | Field measurement |
 | A13-04 | Adaptation produces a **recommendation** shown to the user, not an automatic sender change. | The four §25 signals are receiver-side and the three responses are sender-side, with no return path in OSP/1.0. See SI-010 — the loop cannot be closed without inventing protocol. | `src/qr/adaptiveMonitor.ts` | When a back-channel is specified |
 
+## 3.13 Security (Phase 11)
+
+| ID | Assumption | Why necessary | Where | Verify in |
+| --- | --- | --- | --- | --- |
+| A14-01 | SHA-256 is implemented in the repository rather than taken from a library. | The `IntegrityVerifier` contract is frozen and synchronous; `expo-crypto` is asynchronous, `crypto-js` is unmaintained, and Node's `crypto` does not exist in React Native. A hash is the one primitive where a self-contained implementation is fully verifiable — the tests pin it to FIPS 180-4's published vectors, including the million-character one, so a wrong implementation cannot pass. See ADR-0004. | `src/security/sha256.ts` | If an audited synchronous digest enters the dependency set |
+| A14-02 | An unkeyed SHA-256 provides **integrity, not authenticity**. | §20.16 says integrity verification protects against corruption and accidental modification, and does not claim authenticity. An attacker who can replace the file can replace the manifest hash with it. Authenticity needs §19.10 authentication, which needs keys, which SI-012 blocks. Recorded so nobody reads the digest as a signature. | `src/security/integrity.ts` | §19 authentication, once SI-012 is resolved |
+| A14-03 | Session secrets live in ordinary memory, wiped on destruction. | SECURITY.md §9 says sensitive information SHOULD be stored securely; no secure-storage capability exists in the technology stack (TRD §3 lists no keystore module). Wiping the bytes on session termination satisfies §7's "session termination SHALL destroy temporary security state"; it does not satisfy §9. | `src/security/securityContext.ts` | When a keystore dependency is added |
+| A14-04 | Encryption is `NONE`, and any other algorithm is **refused**. | §19.1 and SECURITY.md §5 make encryption optional, so this is compliant. Refusing rather than passing ciphertext through is the choice: a build that treated an unsupported algorithm as plain text would turn a missing feature into a silent loss of confidentiality (§19.14). | `src/security/cipher.ts` | When SI-012 is resolved |
+
 ---
 
 # 4. Assumptions By Verifying Phase
@@ -237,7 +246,9 @@ A phase should check these before building on them.
 | QR rendering and capacity (QR_SPEC §16, Appendix A) | A9-03, A9-04, A9-05 |
 | Device integration (camera, file picker) | A12-01, A12-02 |
 | Storage of transfer records | A12-03 |
-| Integrity / Security (§20) — placeholder digest | A12-04 |
+| Integrity / Security (§20) — placeholder digest | **A12-04 resolved — see §5** |
+| Encryption (§19), once SI-012 is resolved | A14-02, A14-04 |
+| Secure storage (SECURITY.md §9) | A14-03 |
 | Device measurement against TRD §34 | A13-01, A13-03 |
 | Adaptive transport (TRD §25) | A13-02, A13-04 |
 | Device camera adapter | A10-01 |
@@ -253,6 +264,7 @@ A phase should check these before building on them.
 
 | ID | Assumption | Outcome |
 | --- | --- | --- |
+| A12-04 | The composition root hashes files with `PHOTON-PLACEHOLDER-32` (FNV-1a). | **Resolved** by SEC-003. §20.7 requires at least one common cryptographic hash and names SHA-256 first; SECURITY.md §6 makes SHA-256 the file-integrity algorithm outright. The placeholder is deleted, not deprecated — leaving it reachable would leave a way to ship a non-cryptographic digest by passing one option. Manifests now record `SHA-256`, and `src/security/sha256.ts` is pinned to FIPS 180-4's published vectors. |
 | A2-09 | Identifiers are opaque non-empty strings. | **Corrected.** PACKET_SPEC §5 gives the Session ID and File ID fields 16 bytes, encoded per §3 as UUIDs. The domain model was refactored to UUID-based value types so an identifier that cannot be serialized cannot be constructed. Recorded as a demonstration that this ledger works: the assumption was made before PACKET_SPEC was read, and reading it corrected the model. |
 | A2-01 | `Session` omits the accumulating members of §8.7. | **Confirmed** by PRO-001. The SessionManager owns `lastActivityAt` and the session registry; the domain model stayed a value object. |
 | A4-01 | The session lifecycle is not literally linear; the table encoded §8.8 and the §8.17 invariants. | **Partly corrected** by reading §26.4 and STATE_MACHINES.md §6 before PRO-004. §26.4 supplies an explicit allowed-transition list, which is now honoured in full — including the direct `Paused → Active` edge, which the table had been missing. `Resuming` is kept because §8.8 defines its semantics and §8.3 lists it; §26.4 omitting it is read as showing the shortest path, not as deleting a state. Every live state may still expire, because §8.9's SHALL outranks §26.4's unkeyworded list under the §4.6 precedence rule. Full reasoning is in `src/core/session/transitions.ts`. |

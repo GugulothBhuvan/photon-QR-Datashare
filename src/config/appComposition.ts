@@ -22,7 +22,7 @@
 import { createMemoryCamera, type MemoryCamera } from '@camera/memoryCamera';
 import { createQrDecoder } from '@camera/qrDecoder';
 
-import type { Clock, IdGenerator, IntegrityVerifier } from '@core/contracts';
+import type { Clock, IdGenerator, IntegrityVerifier, PayloadCipher } from '@core/contracts';
 import { toUserMessage } from '@core/errors';
 import { createManifestManager } from '@core/manifest/manifestManager';
 import { createPacketManager } from '@core/packet/packetManager';
@@ -41,50 +41,13 @@ import { createTransferService } from '@services/transferService';
 
 import { bytesToHex } from '@utils/hex';
 
+import { createDisabledCipher } from '@security/cipher';
+import { createSha256Verifier } from '@security/integrity';
+
 import { defaultAppConfig, type AppConfig } from './appConfig';
 
 /** The protocol version this build speaks. See COMPATIBILITY.md §2. */
 export const PROTOCOL_VERSION = 1;
-
-/**
- * A placeholder digest.
- *
- * **Not cryptographic.** It detects accidental corruption, which is what
- * reconstruction needs today, and nothing more. Named so that no one mistakes
- * it for SHA-256, and reported as the manifest's integrity algorithm so a
- * receiver expecting SHA-256 refuses the transfer rather than silently
- * accepting a weaker check. Recorded as A12-04; §20 owns the real algorithms.
- */
-export const PLACEHOLDER_DIGEST_ALGORITHM = 'PHOTON-PLACEHOLDER-32';
-
-/** Creates the placeholder verifier. Replaced wholesale in Phase 11. */
-export function createPlaceholderVerifier(): IntegrityVerifier {
-  const digest = (bytes: Uint8Array): Uint8Array => {
-    // FNV-1a, 32-bit. Fast, deterministic, and adequate for spotting a
-    // corrupted reassembly. It is not collision resistant.
-    let hash = 0x811c9dc5;
-
-    for (const byte of bytes) {
-      hash ^= byte;
-      hash = Math.imul(hash, 0x01000193) >>> 0;
-    }
-
-    return Uint8Array.from([
-      (hash >>> 24) & 0xff,
-      (hash >>> 16) & 0xff,
-      (hash >>> 8) & 0xff,
-      hash & 0xff,
-      bytes.length & 0xff,
-      (bytes.length >>> 8) & 0xff,
-    ]);
-  };
-
-  return {
-    algorithm: PLACEHOLDER_DIGEST_ALGORITHM,
-    digest,
-    verify: (bytes, expected) => bytesToHex(digest(bytes)) === bytesToHex(expected),
-  };
-}
 
 /** An in-memory settings repository, used until a storage adapter exists. */
 export function createMemorySettingsRepository(
@@ -111,6 +74,8 @@ export interface AppCompositionOptions {
   /** Defaults to `crypto.randomUUID` where available. */
   readonly idGenerator?: IdGenerator;
   readonly verifier?: IntegrityVerifier;
+  /** Defaults to the disabled cipher (§19.4). */
+  readonly cipher?: PayloadCipher;
   readonly camera?: MemoryCamera;
   readonly settingsRepository?: ValueRepository<AppConfig>;
 }
@@ -165,7 +130,7 @@ function defaultIdGenerator(): IdGenerator {
 export function createAppGraph(options: AppCompositionOptions = {}): AppGraph {
   const clock: Clock = options.clock ?? { now: () => Date.now() };
   const idGenerator = options.idGenerator ?? defaultIdGenerator();
-  const verifier = options.verifier ?? createPlaceholderVerifier();
+  const verifier = options.verifier ?? createSha256Verifier();
   const camera = options.camera ?? createMemoryCamera();
 
   const sessions = createSessionManager({
@@ -176,8 +141,13 @@ export function createAppGraph(options: AppCompositionOptions = {}): AppGraph {
   const manifests = createManifestManager();
   const packets = createPacketManager();
 
+  // §19.4 Disabled. OSP/1.0 in this build performs no encryption; see
+  // `src/security/cipher.ts` and SI-012 for what blocks it.
+  const cipher = options.cipher ?? createDisabledCipher();
+
   const transfers = createTransferService({
     sessions,
+    cipher,
     manifests,
     packets,
     clock,
@@ -187,6 +157,7 @@ export function createAppGraph(options: AppCompositionOptions = {}): AppGraph {
 
   const receives = createReceiveService({
     camera,
+    cipher,
     decoder: createQrDecoder(),
     packets,
     manifests,

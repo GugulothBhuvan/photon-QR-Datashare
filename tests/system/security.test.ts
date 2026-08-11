@@ -7,16 +7,13 @@
  * validation to execute automatically — which is why these are a named suite
  * rather than assertions scattered through other files.
  *
- * **Two of the six cannot be tested yet, and are not faked.** SHA-256
- * verification and encryption are governed by PROTOCOL_SPEC §20, which is
- * unread, and neither is implemented — the build ships a placeholder digest
- * that names itself (A12-04). What *is* tested is the property that makes the
- * gap safe: an unsupported algorithm is reported as unverified rather than as
- * verified. A test that hashed with the placeholder and called it SHA-256
- * would satisfy §8 on paper and mislead every reader of this file.
+ * **Five of the six are implemented and tested here.** Encryption is the
+ * exception: §19.1 makes it optional and SI-012 records why it cannot be
+ * implemented interoperably. What is tested instead is the refusal — a build
+ * that cannot decrypt must say so rather than hand back ciphertext.
  *
- * The four that can be tested are tested against the real packet layer, not a
- * model of it.
+ * Everything below runs against the real packet layer and the production
+ * SHA-256 verifier, not a model of either.
  */
 import { createQrDecoder } from '@camera/qrDecoder';
 import { deserializePacket } from '@core/packet/deserializer';
@@ -29,11 +26,14 @@ import {
 import { serializePacket } from '@core/packet/serializer';
 import { PacketRejection } from '@core/packet/validator';
 import { verifyFile } from '@core/reconstruction/integrityChecker';
-import type { IntegrityVerifier } from '@core/contracts';
+import { createSha256Verifier } from '@security/integrity';
+import { bytesToHex } from '@utils/hex';
 import { createPacket } from '@domain/packet';
 import { fileId, sessionId } from '@domain/ids';
 
 import { captureOf, createHarness } from '../support/opticalHarness';
+
+const PACKET_SIZE = 128;
 
 const OURS = sessionId('11111111-1111-4111-8111-111111111111');
 const THEIRS = sessionId('22222222-2222-4222-8222-222222222222');
@@ -356,69 +356,122 @@ describe('replay protection (§8)', () => {
   });
 });
 
-describe('integrity verification (§8)', () => {
+describe('integrity verification (§8, §20)', () => {
   const stream = Uint8Array.from([1, 2, 3, 4, 5]);
+  const verifier = createSha256Verifier();
 
-  const verifier: IntegrityVerifier = {
-    algorithm: 'TEST-DIGEST',
-    digest: (bytes) => Uint8Array.from([bytes.length & 0xff, bytes[0] ?? 0]),
-    verify: () => true,
-  };
-
-  it('passes when the digest and size match', () => {
-    const result = verifyFile({
-      stream,
-      expectedHash: '0501',
-      expectedSize: stream.byteLength,
-      algorithm: verifier.algorithm,
-      verifier,
-    });
-
-    expect(result.verified).toBe(true);
+  it('is SHA-256, as SECURITY.md §6 requires', () => {
+    expect(verifier.algorithm).toBe('SHA-256');
   });
 
-  it('fails when the content changed', () => {
-    const result = verifyFile({
-      stream: Uint8Array.from([9, 2, 3, 4, 5]),
-      expectedHash: '0501',
-      expectedSize: stream.byteLength,
-      algorithm: verifier.algorithm,
-      verifier,
-    });
+  it('passes when the digest and size match (§20.6)', () => {
+    expect(
+      verifyFile({
+        stream,
+        expectedHash: bytesToHex(verifier.digest(stream)),
+        expectedSize: stream.byteLength,
+        algorithm: verifier.algorithm,
+        verifier,
+      }).verified,
+    ).toBe(true);
+  });
 
-    expect(result.verified).toBe(false);
+  it('fails when one byte of the content changed (§20.10)', () => {
+    expect(
+      verifyFile({
+        stream: Uint8Array.from([9, 2, 3, 4, 5]),
+        expectedHash: bytesToHex(verifier.digest(stream)),
+        expectedSize: stream.byteLength,
+        algorithm: verifier.algorithm,
+        verifier,
+      }).verified,
+    ).toBe(false);
   });
 
   it('reports an unsupported algorithm as unverified, never as verified', () => {
-    // The property that keeps the SHA-256 gap safe. "Verification was skipped"
-    // and "verification passed" must never be the same value (A11-04): a
-    // receiver told SHA-256 by a manifest must refuse rather than accept a
-    // weaker check silently.
+    // §20.17.4: a transfer SHALL NOT complete unless verification succeeds.
+    // "Verification was skipped" and "verification passed" must never be the
+    // same value (A11-04) — a receiver told SHA-512 must refuse rather than
+    // silently accept a weaker check.
     const result = verifyFile({
       stream,
-      expectedHash: '0501',
+      expectedHash: bytesToHex(verifier.digest(stream)),
       expectedSize: stream.byteLength,
-      algorithm: 'SHA-256',
+      algorithm: 'SHA-512',
       verifier,
     });
 
     expect(result.verified).toBe(false);
     expect(result.reason).toBeDefined();
   });
+
+  it('verifies a real transfer against a real SHA-256 digest, end to end', async () => {
+    // §20.17.10: successful verification guarantees the reconstructed file is
+    // byte-for-byte the original. This is the only place that claim is checked
+    // against the production digest through the whole pipeline.
+    const harness = createHarness({ packetSize: PACKET_SIZE });
+    const content = Uint8Array.from({ length: 700 }, (_unused, index) => (index * 31) & 0xff);
+
+    const outcome = await harness.run([{ name: 'verified.bin', content }]);
+
+    expect(outcome.files).toHaveLength(1);
+    expect(outcome.files[0]?.integrity.verified).toBe(true);
+    expect(harness.graph.integrityAlgorithm).toBe('SHA-256');
+    // The manifest records the digest the receiver recomputed (§20.8).
+    expect(outcome.files[0]?.integrity.actualHash).toBe(bytesToHex(verifier.digest(content)));
+  });
+});
+
+describe('confidentiality (§19)', () => {
+  it('performs no encryption, and says so in the manifest (§19.8)', () => {
+    // Encryption is optional (§19.1). What must never happen is a build that
+    // claims encryption it does not perform, so the manifest records NONE.
+    const harness = createHarness({ packetSize: PACKET_SIZE });
+    harness.graph.send.addFiles([{ name: 'a.bin', content: Uint8Array.from([1, 2, 3, 4]) }]);
+    harness.graph.send.prepare();
+
+    for (const entry of harness.graph.send.prepared()!.manifest.entries) {
+      expect(entry.encryption).toBe('NONE');
+    }
+  });
+
+  it('leaves protocol metadata readable, as §19.5 requires', () => {
+    // §19.5 keeps session id, packet type, packet index and file id in the
+    // clear so a receiver can route and validate without decrypting. With no
+    // encryption this is trivially true — the test exists so that enabling
+    // encryption later cannot quietly break it.
+    const harness = createHarness({ packetSize: PACKET_SIZE });
+    harness.graph.send.addFiles([{ name: 'a.bin', content: Uint8Array.from([1, 2, 3, 4]) }]);
+    harness.graph.send.prepare();
+
+    const prepared = harness.graph.send.prepared()!;
+    const decoded = createQrDecoder().decode(captureOf(prepared.frames.at(0)!));
+
+    expect(decoded.ok).toBe(true);
+    if (!decoded.ok) {
+      return;
+    }
+
+    const parsed = deserializePacket(decoded.payload, { expectedSessionId: prepared.sessionId });
+
+    expect(parsed.ok).toBe(true);
+    expect(parsed.validation.valid).toBe(true);
+  });
 });
 
 /*
  * §8 items not verifiable in this build, and why:
  *
- * - **SHA-256 verification.** PROTOCOL_SPEC §20 owns integrity algorithms and
- *   is unread; the build ships `PHOTON-PLACEHOLDER-32` (A12-04), which names
- *   itself precisely so it cannot be mistaken for a cryptographic digest. What
- *   is tested above is that an unsupported algorithm fails closed.
- * - **Encryption.** §19 is unread and no encryption exists. The Send and
- *   Settings screens report it as unavailable rather than offering a toggle
- *   that does nothing.
+ * - **Encryption.** §19 makes it optional and this build performs none, because
+ *   §19.7 and SECURITY.md §8 defer key exchange to each other and neither
+ *   defines one (SI-012). What is tested is the seam and the refusal: the
+ *   manifest records NONE, and a manifest naming an algorithm this build cannot
+ *   perform is rejected rather than treated as plain text.
+ * - **Authenticity.** An unkeyed SHA-256 proves the bytes match the manifest,
+ *   not who wrote the manifest (A14-02). Authenticity needs §19.10
+ *   authentication, which needs the keys SI-012 blocks.
  *
- * Both become testable in the security phase. Until then, recording them as
- * untested is the honest reading of §15.7 — a suite that pretended otherwise
- * would be worse than the gap it hid.
+ * SHA-256 verification **is** now tested — see `tests/unit/sha256.test.ts` for
+ * the algorithm against FIPS 180-4's published vectors, and above for its use
+ * through the whole pipeline.
  */

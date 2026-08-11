@@ -33,6 +33,7 @@
       "@config/*": ["./src/config/*"],
       "@utils/*": ["./src/utils/*"],
       "@events/*": ["./src/events/*"],
+      "@security/*": ["./src/security/*"],
       "@telemetry/*": ["./src/telemetry/*"],
       "@domain/*": ["./src/types/*"]
     }

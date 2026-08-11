@@ -25,7 +25,7 @@ import type { PacketManager } from '@core/packet/packetManager';
 import { buildFile } from '@core/reconstruction/fileBuilder';
 import { createPacketMap, type PacketMap } from '@core/reconstruction/packetMap';
 import { verifyFile, type IntegrityResult } from '@core/reconstruction/integrityChecker';
-import type { IntegrityVerifier } from '@core/contracts';
+import { DecryptFailure, type IntegrityVerifier, type PayloadCipher } from '@core/contracts';
 import type { ManifestManager } from '@core/manifest/manifestManager';
 
 import type { FileId, SessionId } from '@domain/ids';
@@ -61,12 +61,28 @@ export interface ReceiveProgress {
 export interface CompletedFile {
   readonly fileId: FileId;
   readonly name: string;
+  /** The plaintext bytes, after decryption if the transfer was encrypted. */
   readonly stream: Uint8Array;
   readonly integrity: IntegrityResult;
 }
 
+/** A file that was reassembled but could not be decrypted (§19.11, §19.14). */
+export interface UndecryptableFile {
+  readonly fileId: FileId;
+  readonly name: string;
+  readonly reason: DecryptFailure;
+}
+
 export interface ReceiveServiceOptions {
   readonly camera: CameraAdapter;
+  /**
+   * Decrypts a reassembled stream before integrity verification (§19.11).
+   *
+   * §19.16.9 and §20.9 fix that order: the manifest's hash describes the
+   * plaintext, so verifying before decrypting would compare a digest against
+   * ciphertext and fail every encrypted transfer.
+   */
+  readonly cipher: PayloadCipher;
   readonly decoder: QrDecoder;
   readonly packets: PacketManager;
   readonly manifests: ManifestManager;
@@ -87,6 +103,17 @@ export interface ReceiveSession {
    * than returned partially built.
    */
   finish(): readonly CompletedFile[];
+
+  /**
+   * Files that reassembled but could not be decrypted (§19.14).
+   *
+   * Reported separately from the completed files so a missing file and an
+   * unreadable one are never confused: §19.14 requires a failed encrypted
+   * transfer to produce no file, and a caller still needs to say why.
+   *
+   * Populated by `finish`.
+   */
+  undecryptable(): readonly UndecryptableFile[];
 }
 
 export interface ReceiveService {
@@ -100,7 +127,7 @@ export interface ReceiveService {
 }
 
 export function createReceiveService(options: ReceiveServiceOptions): ReceiveService {
-  const { camera, decoder, packets, manifests, verifier } = options;
+  const { camera, decoder, packets, manifests, verifier, cipher } = options;
 
   return {
     start(sessionId, onProgress) {
@@ -119,6 +146,9 @@ export function createReceiveService(options: ReceiveServiceOptions): ReceiveSer
       let framesSeen = 0;
       let framesDecoded = 0;
       let stopped = false;
+
+      /** Files that reassembled but could not be decrypted (§19.14). */
+      const undecryptable: UndecryptableFile[] = [];
 
       function progress(): ReceiveProgress {
         let total = 0;
@@ -228,6 +258,7 @@ export function createReceiveService(options: ReceiveServiceOptions): ReceiveSer
 
         finish() {
           const completed: CompletedFile[] = [];
+          undecryptable.length = 0;
 
           for (const entry of manifest.entries) {
             const built = buildFile(packets.orderedPackets(sessionId, entry.file.id), {
@@ -238,13 +269,38 @@ export function createReceiveService(options: ReceiveServiceOptions): ReceiveSer
               continue;
             }
 
+            // §19.11: decryption comes after reconstruction and before
+            // integrity verification (§19.16.9, §20.9). A manifest naming an
+            // algorithm this build cannot perform lands here as a refusal.
+            if (!cipher.supports(entry.encryption)) {
+              undecryptable.push({
+                fileId: entry.file.id,
+                name: entry.file.name,
+                reason: DecryptFailure.UnsupportedAlgorithm,
+              });
+              continue;
+            }
+
+            const decrypted = cipher.decrypt(built.stream);
+
+            if (!decrypted.ok) {
+              // §19.11: reconstruction fails, integrity verification does not
+              // proceed, and no file is produced.
+              undecryptable.push({
+                fileId: entry.file.id,
+                name: entry.file.name,
+                reason: decrypted.reason,
+              });
+              continue;
+            }
+
             // §3.24: integrity verified before a transfer is complete.
             completed.push({
               fileId: entry.file.id,
               name: entry.file.name,
-              stream: built.stream,
+              stream: decrypted.plaintext,
               integrity: verifyFile({
-                stream: built.stream,
+                stream: decrypted.plaintext,
                 expectedHash: entry.file.hash,
                 expectedSize: entry.file.size,
                 algorithm: manifest.configuration.integrityAlgorithm,
@@ -254,6 +310,10 @@ export function createReceiveService(options: ReceiveServiceOptions): ReceiveSer
           }
 
           return completed;
+        },
+
+        undecryptable() {
+          return undecryptable;
         },
       };
     },

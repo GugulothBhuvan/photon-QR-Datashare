@@ -25,6 +25,7 @@ const ALIASES = [
   'config',
   'utils',
   'events',
+  'security',
   'telemetry',
 ];
 
