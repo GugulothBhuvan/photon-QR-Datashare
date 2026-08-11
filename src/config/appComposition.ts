@@ -24,6 +24,8 @@
 import type { CameraAdapter } from '@camera/cameraPort';
 import { createMemoryCamera } from '@camera/memoryCamera';
 import { createDeviceFiles, type PickedFile } from '@storage/deviceFiles';
+import { createDeviceStorage } from '@storage/deviceStorage';
+import type { KeyValueStore } from '@storage/ports';
 
 import type { Store } from '@state/store';
 import { createPlatformCamera } from './platformCamera';
@@ -44,6 +46,7 @@ import { createSettingsController } from '@controllers/settingsController';
 import { protocolVersion as toProtocolVersion } from '@domain/ids';
 
 import type { ValueRepository } from '@repositories/repository';
+import { createValueRepository } from '@repositories/valueRepository';
 
 import { createDiscoveryService } from '@services/discoveryService';
 import { createReceiveService } from '@services/receiveService';
@@ -55,12 +58,31 @@ import { NONE } from '@domain/manifest';
 import { cipherFor } from '@security/cipher';
 import { createSha256Verifier } from '@security/integrity';
 
-import { defaultAppConfig, type AppConfig } from './appConfig';
+import { defaultAppConfig, parseConfig, serializeConfig, type AppConfig } from './appConfig';
 
 /** The protocol version this build speaks. See COMPATIBILITY.md §2. */
 export const PROTOCOL_VERSION = 1;
 
-/** An in-memory settings repository, used until a storage adapter exists. */
+/** The key application settings are stored under. */
+export const SETTINGS_KEY = 'settings';
+
+/**
+ * Settings persisted through a key-value adapter.
+ *
+ * Falls back to the defaults for a record it cannot read rather than throwing:
+ * a preferences file written by an older build should cost a user their
+ * preferences, not their ability to launch.
+ */
+export function createSettingsRepository(store: KeyValueStore): ValueRepository<AppConfig> {
+  return createValueRepository({
+    store,
+    key: SETTINGS_KEY,
+    codec: { encode: serializeConfig, decode: parseConfig },
+    defaultValue: defaultAppConfig,
+  });
+}
+
+/** An in-memory settings repository, used by tests and platforms without storage. */
 export function createMemorySettingsRepository(
   initial: AppConfig = defaultAppConfig,
 ): ValueRepository<AppConfig> {
@@ -212,6 +234,11 @@ export function createAppGraph(options: AppCompositionOptions = {}): AppGraph {
   const files = createDeviceFiles();
   const camera = options.camera ?? platform?.adapter ?? createMemoryCamera();
 
+  // Persistent records, when the platform has a filesystem. Resolved even when
+  // a test supplies its own settings repository, because the About screen
+  // reports whether storage is persistent either way.
+  const storage = createDeviceStorage();
+
   const sessions = createSessionManager({
     clock,
     idGenerator,
@@ -267,7 +294,10 @@ export function createAppGraph(options: AppCompositionOptions = {}): AppGraph {
     receive: createReceiveController({ camera, receives, discovery, toUserMessage }),
     discovery,
     settings: createSettingsController({
-      repository: options.settingsRepository ?? createMemorySettingsRepository(),
+      // Persisted, so preferences survive a restart. Before this the graph
+      // only ever registered the in-memory repository and every setting reset
+      // on launch.
+      repository: options.settingsRepository ?? createSettingsRepository(storage.store),
       defaults: defaultAppConfig,
       toUserMessage,
     }),
@@ -285,6 +315,12 @@ export function createAppGraph(options: AppCompositionOptions = {}): AppGraph {
       {
         name: 'File picker',
         status: files.isDevice ? 'Available' : (files.unavailableReason ?? 'Unavailable'),
+      },
+      {
+        name: 'Settings storage',
+        status: storage.isPersistent
+          ? 'Persistent'
+          : `Resets on launch — ${storage.unavailableReason ?? 'no filesystem'}`,
       },
     ],
     ...(platform?.unavailableReason === undefined

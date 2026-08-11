@@ -8,6 +8,17 @@
  * Secure storage requirements are defined by docs/SECURITY.md.
  */
 
+export { createDeviceStorage, STORE_FILENAME, type DeviceStorage } from './deviceStorage';
+
+export {
+  createFileKeyValueStore,
+  parseStore,
+  serializeStore,
+  STORE_FORMAT_VERSION,
+  type FileKeyValueStoreOptions,
+  type TextFile,
+} from './fileKeyValueStore';
+
 export { createMemoryKeyValueStore } from './memoryKeyValueStore';
 
 export type { FileReference, FileStore, KeyValueStore } from './ports';

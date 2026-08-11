@@ -90,3 +90,47 @@ export function withConfig(base: AppConfig, changes: Partial<AppConfig>): AppCon
   assertValidConfig(next);
   return next;
 }
+
+/** Serializes a config for storage. */
+export function serializeConfig(config: AppConfig): string {
+  return JSON.stringify(config);
+}
+
+/**
+ * Parses a stored config, or `undefined` if it is not one.
+ *
+ * Stored preferences are untrusted input, which `assertValidConfig` already
+ * says: an update can leave behind a value the build no longer defines. The
+ * difference here is that a repository must not *throw* over it — a settings
+ * file written by an older version should cost the user their preferences, not
+ * their ability to launch.
+ *
+ * Missing members fall back to their defaults, so adding a preference does not
+ * invalidate everyone's stored settings.
+ */
+export function parseConfig(raw: string): AppConfig | undefined {
+  let parsed: unknown;
+
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return undefined;
+  }
+
+  if (typeof parsed !== 'object' || parsed === null) {
+    return undefined;
+  }
+
+  const stored = parsed as Partial<AppConfig>;
+  const storage = typeof stored.storage === 'object' ? (stored.storage ?? {}) : {};
+
+  try {
+    return withConfig(defaultAppConfig, {
+      ...stored,
+      storage: { ...defaultAppConfig.storage, ...storage },
+    });
+  } catch {
+    // `withConfig` validates. An unknown theme or speed lands here.
+    return undefined;
+  }
+}

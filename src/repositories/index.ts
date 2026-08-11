@@ -15,3 +15,9 @@ export {
 } from './keyValueRepository';
 
 export type { Repository, ValueRepository } from './repository';
+
+export {
+  createValueRepository,
+  type ValueCodec,
+  type ValueRepositoryOptions,
+} from './valueRepository';
