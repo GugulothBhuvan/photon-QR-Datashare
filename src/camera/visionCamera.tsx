@@ -41,6 +41,16 @@ export interface CameraSourceProps {
    * bytes of a 4K frame.
    */
   readonly targetWidth?: number;
+  /**
+   * Whether the camera session runs.
+   *
+   * Defaults to `true`, because this component is only mounted when a screen
+   * wants a camera. It previously read `camera.adapter.isRunning()` directly,
+   * which is a value React never re-renders on — so the session stayed
+   * inactive and the preview was blank on a real device. A prop is something
+   * the screen owns and React can observe; an adapter's internal flag is not.
+   */
+  readonly isActive?: boolean;
 }
 
 /**
@@ -49,7 +59,7 @@ export interface CameraSourceProps {
  * Mount this once, inside a receive screen. Unmounting it tears the session
  * down — VisionCamera releases the device with the component.
  */
-export function CameraSource({ camera, targetWidth = 1280 }: CameraSourceProps) {
+export function CameraSource({ camera, targetWidth = 1280, isActive = true }: CameraSourceProps) {
   const device = useCameraDevice('back');
   const permission = useCameraPermission();
 
@@ -133,7 +143,7 @@ export function CameraSource({ camera, targetWidth = 1280 }: CameraSourceProps) 
     <Camera
       style={StyleSheet.absoluteFill}
       device={device}
-      isActive={camera.adapter.isRunning()}
+      isActive={isActive}
       outputs={[frameOutput]}
     />
   );

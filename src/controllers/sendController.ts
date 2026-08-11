@@ -21,7 +21,7 @@ import type { SessionId } from '@domain/ids';
 import { QRSpeedPreference } from '@domain/settings';
 import type { ErrorCorrectionLevel } from '@qr/qrEncoder';
 import { FRAME_RATE_FOR_PREFERENCE } from '@qr/frameScheduler';
-import { renderFrame, type RenderedFrame } from '@qr/qrRenderer';
+import { renderFrame, toSvgPath } from '@qr/qrRenderer';
 
 /** Where the user is in the Send workflow (§7 screen states). */
 export const SendStage = {
@@ -47,12 +47,23 @@ export type SendStage = (typeof SendStage)[keyof typeof SendStage];
  * Named here rather than borrowed from the scheduler so the screen depends on
  * the controller's vocabulary, not the transport's.
  */
+/** What a screen needs to draw one frame (§13). */
+export interface QrFrameGeometry {
+  readonly size: number;
+  /** One SVG path covering every dark module. */
+  readonly path: string;
+  readonly foreground: string;
+  readonly background: string;
+}
+
 export interface FramePosition {
   /** Zero-based index of the frame now showing. */
   readonly index: number;
   readonly frameCount: number;
   /** How long this frame is shown, in milliseconds (§9). */
   readonly durationMs: number;
+  /** Complete passes over the frame list (§11.11 looping). */
+  readonly loops: number;
 }
 
 export interface SendState {
@@ -110,18 +121,32 @@ export interface SendController {
   prepared(): PreparedTransfer | undefined;
 
   /**
-   * Drawable geometry for the frame now showing, at the given width in points.
+   * Drawable geometry for the frame now showing.
    *
    * The controller renders rather than the screen: §13's rendering rules belong
    * to the QR layer, and a screen that reached into it to draw would be one
    * more place those rules could be got wrong.
    *
+   * Returns a **path** rather than a list of rectangles. A version 40 code has
+   * over 30,000 modules, and drawing one view each made the interface too busy
+   * to accept a touch on a real device.
+   *
+   * @param targetSize Rendering units for the geometry. The screen scales it to
+   *   whatever size it draws at, so this need not match the display size.
    * @returns `undefined` before a transfer has been prepared.
    */
-  currentFrame(targetSize: number): RenderedFrame | undefined;
+  currentFrame(targetSize: number): QrFrameGeometry | undefined;
 
   /** Moves the display to the next frame in packet order (§8). */
   advance(): void;
+
+  /**
+   * Restarts the frame sequence from the first frame (§8).
+   *
+   * A receiver that joined late, or lost its place, needs the preamble again.
+   * Looping brings it round eventually; restarting brings it round now.
+   */
+  restart(): void;
 
   addFiles(files: readonly SelectedFile[]): void;
   removeFile(name: string): void;
@@ -178,8 +203,11 @@ export function createSendController(options: SendControllerOptions): SendContro
       return;
     }
 
-    const { index, frameCount, durationMs } = scheduler.state();
-    state.setState((previous) => ({ ...previous, position: { index, frameCount, durationMs } }));
+    const { index, frameCount, durationMs, loops } = scheduler.state();
+    state.setState((previous) => ({
+      ...previous,
+      position: { index, frameCount, durationMs, loops },
+    }));
   }
 
   /**
@@ -224,6 +252,7 @@ export function createSendController(options: SendControllerOptions): SendContro
           index: position.index,
           frameCount: position.frameCount,
           durationMs: position.durationMs,
+          loops: position.loops,
         },
       }));
     } catch (error: unknown) {
@@ -271,11 +300,27 @@ export function createSendController(options: SendControllerOptions): SendContro
     currentFrame(targetSize) {
       const frame = preparedTransfer?.scheduler.current();
 
-      return frame === undefined ? undefined : renderFrame(frame, { targetSize });
+      if (frame === undefined) {
+        return undefined;
+      }
+
+      const rendered = renderFrame(frame, { targetSize });
+
+      return {
+        size: rendered.size,
+        path: toSvgPath(rendered),
+        foreground: rendered.foreground,
+        background: rendered.background,
+      };
     },
 
     advance() {
       preparedTransfer?.scheduler.advance();
+      publishPosition();
+    },
+
+    restart() {
+      preparedTransfer?.scheduler.reset();
       publishPosition();
     },
 

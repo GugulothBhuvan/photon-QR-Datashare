@@ -87,34 +87,63 @@ export function SendScreen({ onPickFiles, onBack, frameSize = 280 }: SendScreenP
     const { position } = state;
 
     return (
-      <Screen title={state.stage === SendStage.Paused ? 'Paused' : 'Sending'}>
+      <Screen title={state.stage === SendStage.Paused ? 'Paused' : 'Sending'} scrollable={false}>
         <QrDisplay
           frame={frame}
+          size={frameSize}
           caption={
             position === undefined
               ? undefined
-              : `Frame ${position.index + 1} of ${position.frameCount} · ${position.durationMs} ms`
+              : `Frame ${position.index + 1} of ${position.frameCount} · ${position.durationMs} ms` +
+                (position.loops > 0 ? ` · pass ${position.loops + 1}` : '')
           }
         />
 
-        <Card>
-          <Text variant="label" tone="muted">
-            Point the other device at this screen
-          </Text>
-          <ProgressBar
-            value={position === undefined ? 0 : (position.index + 1) / position.frameCount}
-            label="Frames displayed"
-          />
-        </Card>
-
+        {/*
+          Controls sit directly beneath the code, above everything else, and the
+          screen does not scroll while transmitting. On a device the previous
+          layout put Pause and Cancel below the fold behind a code that was
+          redrawing five times a second, and they could not be reached.
+        */}
         <View style={styles.row}>
           <Button
             label={state.stage === SendStage.Paused ? 'Resume' : 'Pause'}
             variant="secondary"
             onPress={state.stage === SendStage.Paused ? send.start : send.pause}
           />
+          <Button label="Restart" variant="ghost" onPress={send.restart} />
           <Button label="Cancel" variant="danger" onPress={send.cancel} />
         </View>
+
+        <Card>
+          {/*
+            §10 permits adapting timing mid-transfer, and this is the moment a
+            user knows they need to: the other device is in front of them and
+            failing to read. Offering the control only before transmission asked
+            them to guess.
+          */}
+          <Text variant="label" tone="muted">
+            Speed — slow down if the other device is struggling
+          </Text>
+          <View style={styles.row}>
+            {SPEEDS.map((speed) => (
+              <Button
+                key={speed.value}
+                label={speed.label}
+                variant={state.speed === speed.value ? 'primary' : 'secondary'}
+                onPress={() => send.setSpeed(speed.value)}
+              />
+            ))}
+          </View>
+
+          <ProgressBar
+            value={position === undefined ? 0 : (position.index + 1) / position.frameCount}
+            label="Frames displayed"
+          />
+          <Text variant="caption" tone="muted">
+            Point the other device at this screen. The sequence repeats until you stop it.
+          </Text>
+        </Card>
       </Screen>
     );
   }

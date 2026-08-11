@@ -322,7 +322,9 @@ describe('Send (UI-003, §5.2)', () => {
     // Square, within the requested width, and carrying modules to draw (§13).
     expect(geometry?.size).toBeGreaterThan(0);
     expect(geometry?.size).toBeLessThanOrEqual(280);
-    expect(geometry?.modules.length).toBeGreaterThan(0);
+    expect(geometry?.path.length).toBeGreaterThan(0);
+    // A path, not thousands of rectangles — see QrDisplay.
+    expect(geometry?.path.startsWith('M')).toBe(true);
     expect(geometry?.background).toBe('#FFFFFF');
   });
 
