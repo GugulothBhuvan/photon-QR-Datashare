@@ -84,6 +84,46 @@ export function ReceiveScreen({
   const { colors } = useTheme();
 
   /**
+   * Live rates, sampled once a second.
+   *
+   * Cumulative counters say whether anything is happening; rates say whether
+   * it is happening fast enough, and they are what makes a slow receiver
+   * diagnosable. Three separate numbers because they fail separately: frames
+   * arriving is the camera, frames decoding is the optics and the decoder, and
+   * packets collected is the protocol.
+   */
+  const [rates, setRates] = useState({ seen: 0, decoded: 0, collected: 0 });
+  const sample = useRef({ seen: 0, decoded: 0, collected: 0, at: 0 });
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const now = Date.now();
+      const previous = sample.current;
+      const current = receive.state.getState();
+      const seconds = previous.at === 0 ? 0 : (now - previous.at) / 1000;
+
+      if (seconds > 0) {
+        setRates({
+          seen: (current.framesSeen - previous.seen) / seconds,
+          decoded: (current.framesDecoded - previous.decoded) / seconds,
+          collected: (current.collectedPackets - previous.collected) / seconds,
+        });
+      }
+
+      sample.current = {
+        seen: current.framesSeen,
+        decoded: current.framesDecoded,
+        collected: current.collectedPackets,
+        at: now,
+      };
+    }, 1000);
+
+    return () => {
+      clearInterval(timer);
+    };
+  }, [receive]);
+
+  /**
    * What the receiver is doing, rendered in **every** state.
    *
    * Four device sessions were spent on a receiver that reported nothing, and
@@ -107,6 +147,9 @@ export function ReceiveScreen({
       </Text>
       <Text variant="caption" tone="muted">
         {`Frames seen: ${String(state.framesSeen)} · decoded: ${String(state.framesDecoded)}`}
+      </Text>
+      <Text variant="caption" tone="muted">
+        {`Rate: ${rates.seen.toFixed(1)} captured/s · ${rates.decoded.toFixed(1)} decoded/s · ${rates.collected.toFixed(1)} packets/s`}
       </Text>
       {state.errorMessage === undefined ? null : (
         <Text variant="caption" tone="danger">

@@ -26,7 +26,7 @@ import {
 // obtain the worklet runtime that `useFrameOutput` runs `onFrame` on. Without
 // it the frame stream never starts.
 import 'react-native-vision-camera-worklets';
-import { scheduleOnRN } from 'react-native-worklets';
+import { createSynchronizable, scheduleOnRN } from 'react-native-worklets';
 
 import { CameraPermission } from './cameraPort';
 import {
@@ -83,6 +83,28 @@ function CameraSourceImpl({
   const device = useCameraDevice('back');
   const permission = useCameraPermission();
 
+  /**
+   * Whether a frame is already on its way to JavaScript.
+   *
+   * **Backpressure, and the receiver runs out of memory without it.**
+   * `dropFramesWhileBusy` drops frames while the *worklet* is busy, and this
+   * worklet is not: it copies a buffer and returns. So the camera delivered at
+   * its own rate — thirty to sixty frames a second — and every one allocated a
+   * 691 KB luminance plane and queued it for a JavaScript thread that decodes
+   * about twelve a second. The queue grew by tens of megabytes a second, held
+   * every buffer in it alive, and the process was killed.
+   *
+   * One frame in flight at a time. Frames arriving while JavaScript is busy
+   * are dropped on the camera thread before anything is allocated, which is
+   * also the right answer on merit: a frame from three seconds ago shows a QR
+   * code the sender has already replaced.
+   *
+   * A `Synchronizable` rather than a plain variable because the two runtimes
+   * do not share memory — a captured `let` would be copied into the worklet
+   * and the JavaScript side's writes would never be seen.
+   */
+  const inFlight = useMemo(() => createSynchronizable(false), []);
+
   useEffect(() => {
     // Three states, not two. `hasPermission ? Granted : Denied` would report a
     // user who has never been asked as having refused — and the receive
@@ -117,24 +139,28 @@ function CameraSourceImpl({
       bytesPerRow: number,
       pixelFormat: string,
     ): void => {
-      camera.deliver(
-        toCameraFrame(
-          pixels.buffer as ArrayBuffer,
-          width,
-          height,
-          // The capture timestamp is the camera thread's clock, which is not
-          // the JS thread's. A receiver only uses this for ordering within a
-          // session, so a JS-side reading is the consistent one.
-          Date.now(),
-          bytesPerRow,
-          // `pixelFormat: 'rgb'` is a request, not an answer: the camera picks
-          // BGRA, RGBA or packed 24-bit RGB. Reading four bytes per pixel from
-          // a 24-bit frame offsets every row and decodes nothing.
-          sourceBytesPerPixelFor(pixelFormat, bytesPerRow, width),
-        ),
-      );
+      try {
+        camera.deliver(
+          toCameraFrame(
+            pixels.buffer as ArrayBuffer,
+            width,
+            height,
+            // The capture timestamp is the camera thread's clock, which is not
+            // the JS thread's. A receiver only uses this for ordering within a
+            // session, so a JS-side reading is the consistent one.
+            Date.now(),
+            bytesPerRow,
+            // `pixelFormat: 'rgb'` is a request, not an answer: the camera picks
+            // BGRA, RGBA or packed 24-bit RGB. Reading four bytes per pixel from
+            // a 24-bit frame offsets every row and decodes nothing.
+            sourceBytesPerPixelFor(pixelFormat, bytesPerRow, width),
+          ),
+        );
+      } finally {
+        inFlight.setBlocking(false);
+      }
     },
-    [camera],
+    [camera, inFlight],
   );
 
   /**
@@ -146,11 +172,17 @@ function CameraSourceImpl({
    */
   const deliverLuminance = useCallback(
     (pixels: Uint8Array, width: number, height: number, bytesPerRow: number): void => {
-      camera.deliver(
-        toGrayscaleFrame(pixels.buffer as ArrayBuffer, width, height, Date.now(), bytesPerRow),
-      );
+      try {
+        camera.deliver(
+          toGrayscaleFrame(pixels.buffer as ArrayBuffer, width, height, Date.now(), bytesPerRow),
+        );
+      } finally {
+        // Released whatever happened. A decode that throws must not stop the
+        // camera thread ever sending another frame.
+        inFlight.setBlocking(false);
+      }
     },
-    [camera],
+    [camera, inFlight],
   );
 
   /**
@@ -184,6 +216,11 @@ function CameraSourceImpl({
           return;
         }
 
+        // Dropped before anything is allocated. See `inFlight`.
+        if (inFlight.getDirty()) {
+          return;
+        }
+
         // **Planar frames come through their planes, not the pixel buffer.**
         // VisionCamera documents `getPixelBuffer()` as *undefined behaviour*
         // for a planar frame, and `hasPixelBuffer` is false for one — so the
@@ -203,6 +240,7 @@ function CameraSourceImpl({
 
           const plane = new Uint8Array(luminance.getPixelBuffer()).slice();
 
+          inFlight.setBlocking(true);
           scheduleOnRN(
             deliverLuminance,
             plane,
@@ -223,6 +261,8 @@ function CameraSourceImpl({
         // would deliver bytes that are already gone.
         const copy = new Uint8Array(frame.getPixelBuffer()).slice();
 
+        inFlight.setBlocking(true);
+
         // **Crossed to the JS thread explicitly.** `onFrame` is a worklet on
         // the camera thread; calling a JavaScript function from it directly
         // does nothing on the JS side. That was why the receiver saw no frames
@@ -240,7 +280,7 @@ function CameraSourceImpl({
         frame.dispose();
       }
     },
-    [deliverFrame, deliverLuminance],
+    [deliverFrame, deliverLuminance, inFlight],
   );
 
   const frameOutput = useFrameOutput({
@@ -282,6 +322,18 @@ function CameraSourceImpl({
     },
     [onError],
   );
+
+  useEffect(() => {
+    // Cleared on both edges. A frame in flight when this unmounts never
+    // reaches its callback, and a flag left set would stop the camera thread
+    // ever sending another one — a receiver that works until you leave the
+    // screen and never again.
+    inFlight.setBlocking(false);
+
+    return () => {
+      inFlight.setBlocking(false);
+    };
+  }, [inFlight]);
 
   const cameraRef = useRef<CameraRef>(null);
 
