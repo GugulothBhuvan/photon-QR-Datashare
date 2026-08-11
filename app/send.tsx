@@ -5,15 +5,29 @@
  * screen stays free of platform APIs (planning/DEPENDENCIES.md §4: UI must not
  * depend on platform APIs directly).
  *
- * No picker is wired yet — `expo-document-picker` is not installed, and
- * choosing it is a dependency review of its own. Recorded as A12-02.
+ * The picker arrives through the composition root as a plain function, which is
+ * how the UI reaches a document picker without importing the storage adapter —
+ * the layer boundary forbids that (A12-02).
  */
 import { useRouter } from 'expo-router';
 
+import { useAppServices } from '@hooks/index';
 import { SendScreen } from '@screens/index';
 
 export default function SendRoute() {
   const router = useRouter();
+  const { send, pickFiles } = useAppServices();
 
-  return <SendScreen onPickFiles={() => undefined} onBack={() => router.back()} />;
+  return (
+    <SendScreen
+      onPickFiles={() => {
+        void pickFiles().then((files) => {
+          if (files.length > 0) {
+            send.addFiles(files);
+          }
+        });
+      }}
+      onBack={() => router.back()}
+    />
+  );
 }

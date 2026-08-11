@@ -38,6 +38,10 @@ export interface AppServices {
    * can render without knowing what is inside (ADR-0005).
    */
   readonly cameraPreview?: ComponentType;
+  /** Opens the platform file picker (A12-02). Empty when cancelled. */
+  readonly pickFiles: () => Promise<readonly { name: string; content: Uint8Array }[]>;
+  /** Saves a received file, returning where it was written. */
+  readonly saveFile: (name: string, bytes: Uint8Array) => Promise<string>;
 }
 
 const AppServicesContext = createContext<AppServices | undefined>(undefined);

@@ -23,6 +23,8 @@
  */
 import type { CameraAdapter } from '@camera/cameraPort';
 import { createMemoryCamera } from '@camera/memoryCamera';
+import { createDeviceFiles, type PickedFile } from '@storage/deviceFiles';
+
 import { createPlatformCamera } from './platformCamera';
 import { createQrDecoder } from '@camera/qrDecoder';
 
@@ -119,6 +121,15 @@ export interface AppGraph {
    */
   readonly cameraPreview?: ComponentType;
   /**
+   * Opens the platform file picker (A12-02).
+   *
+   * Resolves empty when the user cancels, or when the platform has no picker —
+   * a screen gets an empty selection rather than an unhandled rejection.
+   */
+  readonly pickFiles: () => Promise<readonly PickedFile[]>;
+  /** Saves a received file, returning where it was written. */
+  readonly saveFile: (name: string, bytes: Uint8Array) => Promise<string>;
+  /**
    * The application's notion of now.
    *
    * Exposed so a screen showing elapsed time reads the same clock the protocol
@@ -166,6 +177,7 @@ export function createAppGraph(options: AppCompositionOptions = {}): AppGraph {
   // to the in-memory one (ADR-0005). An explicit `camera` option always wins,
   // which is how every test injects its own.
   const platform = options.camera === undefined ? createPlatformCamera() : undefined;
+  const files = createDeviceFiles();
   const camera = options.camera ?? platform?.adapter ?? createMemoryCamera();
 
   const sessions = createSessionManager({
@@ -217,6 +229,8 @@ export function createAppGraph(options: AppCompositionOptions = {}): AppGraph {
     }),
     camera,
     ...(platform?.Preview === undefined ? {} : { cameraPreview: platform.Preview }),
+    pickFiles: files.pickFiles,
+    saveFile: files.saveFile,
     now: () => clock.now(),
     integrityAlgorithm: verifier.algorithm,
     protocolVersion: PROTOCOL_VERSION,
