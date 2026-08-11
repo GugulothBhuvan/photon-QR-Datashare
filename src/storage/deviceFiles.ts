@@ -35,6 +35,8 @@ export interface DeviceFiles {
   readonly saveFile: FileSaver;
   /** Whether a real platform implementation was found. */
   readonly isDevice: boolean;
+  /** Why it was unavailable, when it was. Surfaced on the About screen. */
+  readonly unavailableReason?: string;
 }
 
 /**
@@ -44,13 +46,14 @@ export interface DeviceFiles {
  * screen asking to pick a file on a platform without a picker should get an
  * empty selection, not an unhandled rejection.
  */
-function unavailable(): DeviceFiles {
+function unavailable(reason?: string): DeviceFiles {
   return {
     pickFiles: async () => [],
     saveFile: async () => {
       throw new Error('Saving files is not supported on this platform.');
     },
     isDevice: false,
+    ...(reason === undefined ? {} : { unavailableReason: reason }),
   };
 }
 
@@ -124,7 +127,7 @@ export function createDeviceFiles(): DeviceFiles {
         return target.uri;
       },
     };
-  } catch {
-    return unavailable();
+  } catch (error: unknown) {
+    return unavailable(error instanceof Error ? error.message : String(error));
   }
 }

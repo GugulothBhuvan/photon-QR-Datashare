@@ -34,6 +34,15 @@ export interface PlatformCamera {
   readonly Preview?: ComponentType;
   /** Whether a real device camera was found. */
   readonly isDevice: boolean;
+  /**
+   * Why the device camera was unavailable, when it was.
+   *
+   * A bare `catch` that returns a fallback is undiagnosable on a handset: the
+   * user sees a placeholder and neither they nor a developer can tell whether
+   * the module failed to load, the permission was refused, or the fallback was
+   * intended. The reason is kept and surfaced on the About screen.
+   */
+  readonly unavailableReason?: string;
 }
 
 /**
@@ -82,9 +91,14 @@ export function createPlatformCamera(force?: 'memory'): PlatformCamera {
     const Preview: ComponentType = () => binding.CameraSource({ camera });
 
     return { adapter: camera.adapter, Preview, isDevice: true };
-  } catch {
-    // No native runtime — Node, the web build, or a device build without the
-    // native module linked. The in-memory camera keeps everything working.
-    return { adapter: createMemoryCamera(), isDevice: false };
+  } catch (error: unknown) {
+    // No native runtime — Node, the web build, or a device build where the
+    // native module did not link. The in-memory camera keeps the app working;
+    // the reason is kept so a device can say which of those happened.
+    return {
+      adapter: createMemoryCamera(),
+      isDevice: false,
+      unavailableReason: error instanceof Error ? error.message : String(error),
+    };
   }
 }

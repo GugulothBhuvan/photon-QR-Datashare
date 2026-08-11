@@ -42,6 +42,8 @@ export interface AppServices {
   readonly pickFiles: () => Promise<readonly { name: string; content: Uint8Array }[]>;
   /** Saves a received file, returning where it was written. */
   readonly saveFile: (name: string, bytes: Uint8Array) => Promise<string>;
+  /** What the platform provided, and why anything missing is missing. */
+  readonly diagnostics?: readonly { readonly name: string; readonly status: string }[];
 }
 
 const AppServicesContext = createContext<AppServices | undefined>(undefined);

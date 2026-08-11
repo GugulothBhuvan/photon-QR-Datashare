@@ -36,6 +36,14 @@ export interface AboutScreenProps {
   readonly complianceNote?: string;
   readonly checklist?: readonly ComplianceLine[];
   readonly integrityAlgorithms?: readonly string[];
+  /**
+   * What the platform actually provided.
+   *
+   * On a device this is the fastest way to tell whether the native camera and
+   * file picker linked — a placeholder preview alone cannot distinguish
+   * "no device camera" from "the module failed to load".
+   */
+  readonly diagnostics?: readonly { readonly name: string; readonly status: string }[];
 }
 
 /** Third-party libraries shipped in the application binary. */
@@ -68,6 +76,7 @@ export function AboutScreen({
   complianceNote,
   checklist = [],
   integrityAlgorithms = [],
+  diagnostics = [],
 }: AboutScreenProps) {
   return (
     <Screen title="About" subtitle="Offline optical file transfer">
@@ -95,6 +104,15 @@ export function AboutScreen({
           {integrityAlgorithms.length === 0 ? null : (
             <ListItem title="Integrity algorithms" trailing={integrityAlgorithms.join(', ')} />
           )}
+        </Card>
+      )}
+
+      {diagnostics.length === 0 ? null : (
+        <Card>
+          <Text variant="heading">Platform</Text>
+          {diagnostics.map((entry) => (
+            <ListItem key={entry.name} title={entry.name} subtitle={entry.status} />
+          ))}
         </Card>
       )}
 

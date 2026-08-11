@@ -130,6 +130,13 @@ export interface AppGraph {
   /** Saves a received file, returning where it was written. */
   readonly saveFile: (name: string, bytes: Uint8Array) => Promise<string>;
   /**
+   * What the platform actually provided.
+   *
+   * Present so a handset can report which native capabilities resolved and why
+   * one did not, rather than silently degrading to a placeholder.
+   */
+  readonly diagnostics: readonly { readonly name: string; readonly status: string }[];
+  /**
    * The application's notion of now.
    *
    * Exposed so a screen showing elapsed time reads the same clock the protocol
@@ -229,6 +236,19 @@ export function createAppGraph(options: AppCompositionOptions = {}): AppGraph {
     }),
     camera,
     ...(platform?.Preview === undefined ? {} : { cameraPreview: platform.Preview }),
+    diagnostics: [
+      {
+        name: 'Camera',
+        status:
+          platform?.isDevice === true
+            ? 'Device camera'
+            : (platform?.unavailableReason ?? 'In-memory (no device camera)'),
+      },
+      {
+        name: 'File picker',
+        status: files.isDevice ? 'Available' : (files.unavailableReason ?? 'Unavailable'),
+      },
+    ],
     pickFiles: files.pickFiles,
     saveFile: files.saveFile,
     now: () => clock.now(),
