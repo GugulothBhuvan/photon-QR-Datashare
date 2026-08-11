@@ -10,7 +10,7 @@
  * that impossible and would reintroduce the global mutable state AGENTS.md §6
  * asks us to avoid.
  */
-import { createContext, useContext, type ReactNode } from 'react';
+import { createContext, useContext, type ComponentType, type ReactNode } from 'react';
 
 import type { ReceiveController } from '@controllers/receiveController';
 import type { SendController } from '@controllers/sendController';
@@ -30,6 +30,14 @@ export interface AppServices {
    * protocol uses and a test can control it.
    */
   readonly now: () => number;
+  /**
+   * The live camera preview, when the platform has a real camera.
+   *
+   * An opaque component rather than anything camera-shaped: the UI may not
+   * import the adapter layer, so the composition root hands it a component it
+   * can render without knowing what is inside (ADR-0005).
+   */
+  readonly cameraPreview?: ComponentType;
 }
 
 const AppServicesContext = createContext<AppServices | undefined>(undefined);

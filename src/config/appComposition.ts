@@ -15,12 +15,18 @@
  * - **The digest** is a non-cryptographic fingerprint. `PROTOCOL_SPEC.md` §20
  *   owns integrity algorithms and is unread; Phase 11 supplies SHA-256 against
  *   the same `IntegrityVerifier` contract.
- * - **The camera** is the in-memory adapter. A device camera needs a native
+ * - **The camera** defaults to the in-memory adapter. A device build injects
+ *   `createDeviceCamera` (ADR-0005) instead; this module does not import it,
+ *   because VisionCamera cannot be loaded outside a native runtime. A device camera needs a native
  *   module and a development build; the `CameraAdapter` contract is what the
  *   controller talks to, so only the adapter changes.
  */
-import { createMemoryCamera, type MemoryCamera } from '@camera/memoryCamera';
+import type { CameraAdapter } from '@camera/cameraPort';
+import { createMemoryCamera } from '@camera/memoryCamera';
+import { createPlatformCamera } from './platformCamera';
 import { createQrDecoder } from '@camera/qrDecoder';
+
+import type { ComponentType } from 'react';
 
 import type { Clock, IdGenerator, IntegrityVerifier, PayloadCipher } from '@core/contracts';
 import { toUserMessage } from '@core/errors';
@@ -84,7 +90,16 @@ export interface AppCompositionOptions {
    * no cipher is implemented — see SI-012.
    */
   readonly encryptionAlgorithm?: string;
-  readonly camera?: MemoryCamera;
+  /**
+   * The camera to receive through.
+   *
+   * Any `CameraAdapter`: the in-memory one for tests and the web build, or the
+   * device camera (`createDeviceCamera`, ADR-0005) on hardware. Widened from
+   * the in-memory type in Milestone D so a device build can inject a real
+   * camera without the composition root importing VisionCamera — which cannot
+   * be loaded outside a native runtime.
+   */
+  readonly camera?: CameraAdapter;
   readonly settingsRepository?: ValueRepository<AppConfig>;
 }
 
@@ -94,7 +109,15 @@ export interface AppGraph {
   readonly receive: ReturnType<typeof createReceiveController>;
   readonly settings: ReturnType<typeof createSettingsController>;
   /** Exposed so a receive screen can start the camera it was given. */
-  readonly camera: MemoryCamera;
+  readonly camera: CameraAdapter;
+  /**
+   * The live camera preview, when the platform has one.
+   *
+   * An opaque component: the UI renders it without importing the camera layer,
+   * which the layer boundary forbids. `undefined` under Node and on the web,
+   * where the receive screen falls back to its placeholder.
+   */
+  readonly cameraPreview?: ComponentType;
   /**
    * The application's notion of now.
    *
@@ -139,7 +162,11 @@ export function createAppGraph(options: AppCompositionOptions = {}): AppGraph {
   const clock: Clock = options.clock ?? { now: () => Date.now() };
   const idGenerator = options.idGenerator ?? defaultIdGenerator();
   const verifier = options.verifier ?? createSha256Verifier();
-  const camera = options.camera ?? createMemoryCamera();
+  // A device build resolves the real camera here; Node and the web fall back
+  // to the in-memory one (ADR-0005). An explicit `camera` option always wins,
+  // which is how every test injects its own.
+  const platform = options.camera === undefined ? createPlatformCamera() : undefined;
+  const camera = options.camera ?? platform?.adapter ?? createMemoryCamera();
 
   const sessions = createSessionManager({
     clock,
@@ -189,6 +216,7 @@ export function createAppGraph(options: AppCompositionOptions = {}): AppGraph {
       toUserMessage,
     }),
     camera,
+    ...(platform?.Preview === undefined ? {} : { cameraPreview: platform.Preview }),
     now: () => clock.now(),
     integrityAlgorithm: verifier.algorithm,
     protocolVersion: PROTOCOL_VERSION,

@@ -4,11 +4,12 @@
  * §5.3 requires a camera preview, a scan overlay, a progress indicator, a
  * missing packet counter and a transfer status.
  *
- * **The camera preview is a placeholder.** No device camera adapter exists yet
- * — streaming frames to JavaScript needs a native module and a development
- * build. The `CameraAdapter` contract is what the controller talks to, so the
- * screen is complete and the pipeline runs; only the preview surface is
- * missing. Recorded as A12-01.
+ * The camera preview is **live on a device** and a placeholder elsewhere. The
+ * composition root resolves the platform's camera and hands this screen an
+ * opaque preview component (ADR-0005), so the screen renders a real camera
+ * without importing the adapter layer — which the layer boundary forbids.
+ * Under Node and on the web there is no camera, and the placeholder says so
+ * rather than pretending to be one.
  */
 import { StyleSheet, View } from 'react-native';
 
@@ -32,7 +33,7 @@ export interface ReceiveScreenProps {
 }
 
 export function ReceiveScreen({ onBack, onComplete }: ReceiveScreenProps) {
-  const { receive } = useAppServices();
+  const { receive, cameraPreview: CameraPreview } = useAppServices();
   const state = useStore(receive.state);
   const { colors } = useTheme();
 
@@ -86,9 +87,18 @@ export function ReceiveScreen({ onBack, onComplete }: ReceiveScreenProps) {
         style={[styles.preview, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}
         accessibilityLabel="Camera preview"
       >
+        {/*
+          The live camera on a device, the placeholder everywhere else. The
+          component arrives through the composition root already bound to the
+          adapter, so this screen renders a real camera without importing one —
+          the layer boundary forbids a screen reaching into `@camera` (ADR-0005).
+        */}
+        {CameraPreview === undefined ? null : <CameraPreview />}
         <View style={[styles.overlay, { borderColor: colors.primary }]} />
         <Text variant="caption" tone="muted" style={styles.previewText}>
-          Point at the sending device
+          {CameraPreview === undefined
+            ? 'Camera preview unavailable on this platform'
+            : 'Point at the sending device'}
         </Text>
       </View>
 

@@ -24,6 +24,13 @@
     "experiments": {
       "typedRoutes": true,
       "tsconfigPaths": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "32fb518f-5834-441e-9c0e-87893676ede1"
+      }
+    },
+    "owner": "bhuvanraj05"
   }
 }

@@ -423,7 +423,7 @@ result, and SECURITY.md §8 should say which party generates the key.
 | --- | --- |
 | **Document** | `TRD.md`, with `QR_SPEC.md` |
 | **Section** | TRD §3 Technology Stack (Camera), with QR_SPEC §14 QR Detection |
-| **Status** | `Open` — blocking real camera capture |
+| **Status** | `Implementation in progress` — see the resolution note below |
 
 **Description.** TRD §3 names `expo-camera` as the MVP camera. QR_SPEC §14
 requires the decoder to "Decode payload **bytes**" and states that "Decoded
@@ -495,6 +495,47 @@ specification change.
 
 ---
 
+### Resolution — option 1, implemented but not yet demonstrated
+
+`react-native-vision-camera@5.2.2` was selected and integrated. See **ADR-0005**
+for the alternatives weighed, the version decision and the architectural
+boundary.
+
+It satisfies the requirement on paper, verified against the package's own
+declarations:
+
+- `Frame.getPixelBuffer(): ArrayBuffer` — raw contiguous pixel bytes.
+- `useFrameOutput({ onFrame })` — a callback for every frame, which is §12's
+  continuous capture.
+- `pixelFormat: 'rgb'` requested from the pipeline, so no conversion happens in
+  Photon's code.
+
+The resulting path has no string boundary anywhere:
+
+```text
+Frame (RGB) → getPixelBuffer() → Uint8ClampedArray → CameraFrame
+            → jsQR → payload bytes → deserializePacket → CRC
+```
+
+The frozen `CameraAdapter` contract did not change, and VisionCamera is
+confined to a single module (`src/camera/visionCamera.tsx`).
+
+**This issue is NOT closed.** Installing a library proves an API exists, not
+that the pipeline works. It closes only when a physical device demonstrates:
+
+```text
+VisionCamera → continuous frames → QR detection → raw payload
+             → CameraAdapter → PacketCodec → validated packet
+```
+
+No physical Android device has been available, so that demonstration has not
+happened. Status stays `Implementation in progress` until it does.
+
+TRD §3 still names `expo-camera` as the camera. That document should be
+updated to name the library actually used.
+
+---
+
 # 4. Index By Document
 
 | Document | Issues |
@@ -514,7 +555,7 @@ specification change.
 | `Working` | SI-001, SI-002, SI-005 |
 | `Open` | SI-003, SI-004, SI-006, SI-007, SI-009, SI-010, SI-011 |
 | `Open` — blocking for encryption | SI-012 |
-| `Open` — blocking real camera capture | SI-013 |
+| `Implementation in progress` | SI-013 — needs a device to close |
 | `Open` — **blocking** | **SI-008** |
 | `Resolved` | — |
 | `Withdrawn` | — |

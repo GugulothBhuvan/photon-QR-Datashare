@@ -152,9 +152,85 @@ The failed build targeted `x86_64` — an emulator ABI, useless on a phone. The
 development APK is built for **`arm64-v8a`**, which physical Android devices
 use.
 
-### Result
+### The same failure, a second time
 
-_Recorded on completion._
+Adding the camera stack (four native packages) reintroduced the failure in a
+different target — `react-native-nitro-image`, arm64:
+
+```text
+clang++: error: clang frontend command failed due to signal
+```
+
+A compiler that dies on a *signal* has been killed, not given bad input. As
+before, compiling the same target directly with `ninja -j 1` linked
+`libNitroImage.so` with exit 0.
+
+Two independent C++ targets failing the same way under Gradle and succeeding
+standalone is what turns the diagnosis from plausible into settled: **this host
+cannot compile native code and run parallel workers at the same time.** The
+constraint is the machine, not the project.
+
+It happened a **third** time on the release build, in VisionCamera's own C++:
+
+```text
+FAILED: CMakeFiles/VisionCamera.dir/.../HybridDepthSpec.cpp.o
+clang++: error: clang frontend command failed due to signal
+```
+
+Three independent targets — `react-native-reanimated`, `react-native-nitro-image`,
+`react-native-vision-camera` — each killed under Gradle, each compiling cleanly
+when run alone. The native stack grew from one C++ library to four when the
+camera was added, and this host cannot compile that many in parallel.
+
+### Measured build times
+
+| Build | Result |
+| --- | --- |
+| Debug x86_64, full | **failed** at 20m 34s |
+| Debug arm64, resumed | **succeeded** in 7m 25s |
+| Debug arm64 + camera, incremental | **failed** at 6m 50s |
+| Debug arm64 + camera, resumed | **succeeded** — 87.2 MB APK |
+| Release arm64, full | **failed** at 14m 22s |
+
+Incremental resumes succeed where full builds fail, because Gradle keeps what
+already compiled and each retry has fewer files left and a lower peak demand.
+
+### Consequence: the build moved to EAS
+
+Local building was retained but is no longer the primary route. An EAS cloud
+build compiles on Expo's hardware, where memory is not the binding constraint.
+`eas.json` defines a `preview` profile that produces a directly installable APK
+rather than an app bundle.
+
+This is a **host limitation**, not a Photon defect. The same source compiles
+correctly; it simply needs more memory than this machine has free.
+
+### Result — both routes produced an installable APK
+
+| Route | Outcome |
+| --- | --- |
+| Local Gradle, release arm64 | **Succeeded** in 10m 35s on an incremental resume, after the full build failed at 14m 22s. 49.2 MB. |
+| EAS cloud, `preview` profile | **Succeeded.** Built on Expo hardware, no memory constraint. |
+
+The local release APK, verified with `aapt`:
+
+```text
+package: name='com.photon.app' versionName='0.1.0'
+native-code: 'arm64-v8a'
+uses-permission: name='android.permission.CAMERA'
+```
+
+Both are **release** builds: the JavaScript bundle is embedded, so they run
+standalone with no Metro dev server. A debug APK was also produced (87.2 MB)
+but is not usable for hand-installed device testing, since it fetches its
+bundle from a development server.
+
+The two APKs are signed with **different keystores** — the local one with the
+Android debug key, the EAS one with a keystore Expo generated. Android refuses
+to install one over the other; uninstall before switching.
+
+**P0 and P1 are met.** The Android build works and an installable arm64
+development APK exists.
 
 ---
 
@@ -188,23 +264,77 @@ file through light.
 
 ---
 
-## 8. Real camera path — `BLOCKED`
+## 8. Real camera path — implemented, `NOT TESTED` on hardware
 
-Blocked by **SI-013**, which is a technology decision rather than missing
-implementation work:
+SI-013 asked whether Photon could get byte-accurate QR payloads from a device
+camera at all. It can, and the adapter is written — but no device has run it.
 
-- QR_SPEC §14 requires the decoder to decode payload **bytes** and forward them
-  **unchanged** to the packet layer. §12 requires **continuous** frame capture.
-- `expo-camera@57.0.3` — the camera TRD §3 names — exposes no raw-frame API at
-  all, and its barcode result gives `data: string` and `raw?: string`. Both are
-  strings. Photon's packets are arbitrary binary, so a string round-trip
-  corrupts them.
-- No camera package is installed in the project, and no alternative path exists
-  in the current dependency set.
+### What changed
 
-**A native-library decision is required and has not been taken.** No adapter
-was written that decodes through a string: that would produce a demo which
-corrupts real transfers. Options are in `docs/SPEC_ISSUES.md` SI-013.
+`react-native-vision-camera@5.2.2` replaces `expo-camera` as the camera. The
+decision, alternatives and version reasoning are in **ADR-0005**.
+
+`expo-camera` was ruled out on evidence rather than preference: its barcode
+result exposes `data: string` and `raw?: string`, and it declares no raw-frame
+API at all. Photon's packets are arbitrary binary, so a string round-trip
+destroys them.
+
+VisionCamera provides what §12 and §14 require:
+
+| Requirement | API |
+| --- | --- |
+| §12 continuous capture | `useFrameOutput({ onFrame })` — every frame |
+| §14 payload **bytes** | `Frame.getPixelBuffer(): ArrayBuffer` |
+| §14 forwarded **unchanged** | No string anywhere in the path |
+
+```text
+Frame (RGB) → getPixelBuffer() → Uint8ClampedArray → CameraFrame
+            → jsQR → payload bytes → deserializePacket → CRC
+```
+
+### Architecture
+
+The frozen `CameraAdapter` contract did not change. VisionCamera is confined to
+`src/camera/visionCamera.tsx`; the contract implementation and the pixel
+conversion live in `src/camera/deviceCamera.ts` and import nothing from the
+library, which is why they are unit tested with no device present.
+
+### Status
+
+| Item | Status |
+| --- | --- |
+| Byte-accurate path exists | Demonstrated in the type system and unit tests |
+| Pixel-buffer conversion, incl. row-stride padding | 14 unit tests pass |
+| Adapter lifecycle and permission states | Covered by the same suite |
+| **Camera initialization on hardware** | `NOT TESTED` |
+| **Continuous frame delivery on hardware** | `NOT TESTED` |
+| **QR detection from a real camera** | `NOT TESTED` |
+| **Frame rate, dropped frames, thermal** | `NOT TESTED` |
+
+**SI-013 remains `IMPLEMENTATION IN PROGRESS`.** Installing a library proves an
+API exists, not that the pipeline works.
+
+### Remaining wiring, stated plainly
+
+`createAppGraph` now accepts **any** `CameraAdapter`, so a device build can
+inject `createDeviceCamera` — but the app root still composes the in-memory
+camera, and no screen yet mounts `<CameraSource>`. Two things stand in the way,
+and neither is guesswork worth committing blind:
+
+1. **The layer boundary.** `app/_layout.tsx` and the receive screen are UI, and
+   the lint rules forbid UI importing `@camera/*`. The preview component must
+   therefore be constructed in the composition root and handed to the UI as an
+   opaque component, not imported by it. That is the correct design; it is not
+   yet built.
+2. **Platform resolution.** Selecting the device camera on hardware while
+   keeping Node and web on the in-memory one means a `.native` module variant.
+   Whether Jest's `jest-expo` preset would also resolve `.native` — and so pull
+   the NitroModules TurboModule into the test run and break the suite — was not
+   verified, and could not be verified without risking the green baseline.
+
+So the APK currently exercises the app, not the camera. Wiring it is small and
+well understood, but it should be done with a device attached, where the result
+can actually be observed rather than assumed.
 
 ---
 
