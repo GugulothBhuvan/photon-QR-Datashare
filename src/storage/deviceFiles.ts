@@ -27,12 +27,30 @@ export interface PickedFile {
 /** Picks files to send. Resolves empty when the user cancels. */
 export type FilePicker = () => Promise<readonly PickedFile[]>;
 
-/** Saves a received file, returning where it was written. */
-export type FileSaver = (name: string, bytes: Uint8Array) => Promise<string>;
+/**
+ * Saves a received file, returning where it was written.
+ *
+ * `directoryUri` is §5.6's download folder. When absent — or when the platform
+ * has no directory picker — the file goes to the application's document
+ * directory, which SECURITY.md §9 calls a place safe from being reclaimed by
+ * the system.
+ */
+export type FileSaver = (name: string, bytes: Uint8Array, directoryUri?: string) => Promise<string>;
+
+/**
+ * Asks the user for a folder to save into (§5.6).
+ *
+ * Resolves `undefined` when they cancel, or when the platform has no picker.
+ * On Android this grants long-lived access to a folder outside the
+ * application's private storage, which is the only way a received file is
+ * reachable from a file manager.
+ */
+export type DirectoryPicker = () => Promise<string | undefined>;
 
 export interface DeviceFiles {
   readonly pickFiles: FilePicker;
   readonly saveFile: FileSaver;
+  readonly pickDirectory: DirectoryPicker;
   /** Whether a real platform implementation was found. */
   readonly isDevice: boolean;
   /** Why it was unavailable, when it was. Surfaced on the About screen. */
@@ -52,6 +70,7 @@ function unavailable(reason?: string): DeviceFiles {
     saveFile: async () => {
       throw new Error('Saving files is not supported on this platform.');
     },
+    pickDirectory: async () => undefined,
     isDevice: false,
     ...(reason === undefined ? {} : { unavailableReason: reason }),
   };
@@ -79,6 +98,15 @@ export function createDeviceFiles(): DeviceFiles {
         create(options?: { overwrite?: boolean; intermediates?: boolean }): void;
         write(contents: Uint8Array): void;
         readonly uri: string;
+      };
+      Directory: {
+        new (uri: string): {
+          createFile(
+            name: string,
+            mimeType: string | null,
+          ): { write(contents: Uint8Array): void; readonly uri: string };
+        };
+        pickDirectoryAsync(initialUri?: string): Promise<{ uri: string }>;
       };
       Paths: { document: { uri: string } };
     };
@@ -116,7 +144,18 @@ export function createDeviceFiles(): DeviceFiles {
         return picked;
       },
 
-      async saveFile(name, bytes) {
+      async saveFile(name, bytes, directoryUri) {
+        // §5.6's download folder, when the user has chosen one. Created
+        // through the `Directory` rather than by joining strings: on Android a
+        // picked folder is a `content://` tree URI, and a file inside it has a
+        // document id the platform assigns — concatenating a name onto the
+        // tree URI produces a path that does not exist.
+        if (directoryUri !== undefined) {
+          const target = new fs.Directory(directoryUri).createFile(name, null);
+          target.write(bytes);
+          return target.uri;
+        }
+
         // The document directory, which §9 of SECURITY.md calls a place safe
         // from being reclaimed by the system.
         const target = new fs.File(`${fs.Paths.document.uri}${name}`);
@@ -125,6 +164,16 @@ export function createDeviceFiles(): DeviceFiles {
         target.write(bytes);
 
         return target.uri;
+      },
+
+      async pickDirectory() {
+        // Cancelling rejects rather than resolving empty, which is the
+        // opposite of the document picker in the same package.
+        try {
+          return (await fs.Directory.pickDirectoryAsync()).uri;
+        } catch {
+          return undefined;
+        }
       },
     };
   } catch (error: unknown) {

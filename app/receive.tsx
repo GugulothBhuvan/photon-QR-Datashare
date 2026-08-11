@@ -20,7 +20,7 @@ import { ReceiveScreen, type ReceivedFile } from '@screens/index';
 
 export default function ReceiveRoute() {
   const router = useRouter();
-  const { receive, saveFile, recordTransfer } = useAppServices();
+  const { receive, saveFile, recordTransfer, settings } = useAppServices();
   const [received, setReceived] = useState<readonly ReceivedFile[]>([]);
   const [saveError, setSaveError] = useState<string | undefined>(undefined);
 
@@ -31,6 +31,7 @@ export default function ReceiveRoute() {
       {...(saveError === undefined ? {} : { saveError })}
       onComplete={() => {
         void (async () => {
+          const destination = settings.state.getState().settings.storage.downloadDirectory;
           const summaries: ReceivedFile[] = [];
           const stored: HistoryFile[] = [];
           let totalBytes = 0;
@@ -40,8 +41,13 @@ export default function ReceiveRoute() {
               const verified = file.integrity.verified;
               totalBytes += file.stream.byteLength;
 
-              // §20.14: only a verified file reaches the filesystem.
-              const savedTo = verified ? await saveFile(file.name, file.stream) : undefined;
+              // §20.14: only a verified file reaches the filesystem. §5.6's
+              // download folder decides where; it is read once, above, so a
+              // preference changed mid-save cannot split one transfer across
+              // two directories.
+              const savedTo = verified
+                ? await saveFile(file.name, file.stream, destination)
+                : undefined;
 
               summaries.push({
                 name: file.name,

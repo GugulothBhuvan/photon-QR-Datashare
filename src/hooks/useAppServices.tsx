@@ -53,7 +53,9 @@ export interface AppServices {
   /** Opens the platform file picker (A12-02). Empty when cancelled. */
   readonly pickFiles: () => Promise<readonly { name: string; content: Uint8Array }[]>;
   /** Saves a received file, returning where it was written. */
-  readonly saveFile: (name: string, bytes: Uint8Array) => Promise<string>;
+  readonly saveFile: (name: string, bytes: Uint8Array, directoryUri?: string) => Promise<string>;
+  /** Asks the user for a download folder (§5.6). `undefined` if cancelled. */
+  readonly pickDirectory: () => Promise<string | undefined>;
   /** Records a finished transfer (A12-03, ADR-0007). */
   readonly recordTransfer: (record: TransferRecord) => Promise<void>;
   /** Finished transfers, newest first (ADR-0007). */

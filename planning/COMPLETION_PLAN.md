@@ -176,10 +176,17 @@ startup and written through on change; the policy is injected a `TextFile` so
 it is tested in Node. A corrupt file starts empty and reports it rather than
 refusing to launch. About says whether storage is persistent.
 
-### 3.3 Received-file destination
+### 3.3 Received-file destination — DONE
 
-Files save to the app's document directory. §5.6's storage preferences let a
-user choose, and that choice is currently ignored.
+§5.6's download folder is chosen through the platform picker and honoured on
+save. It is read once per transfer, so a preference changed mid-save cannot
+split one transfer across two directories. Without a chosen folder, files go to
+the application's document directory as before — private to photon, which is
+why the setting exists.
+
+**NOT TESTED on hardware.** `Directory.pickDirectoryAsync` opens the Android
+Storage Access Framework and `createFile` writes through a `content://` tree
+URI; neither can be exercised off-device.
 
 ### 3.4 Received-file review — DONE
 

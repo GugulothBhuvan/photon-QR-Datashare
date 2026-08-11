@@ -176,8 +176,15 @@ export interface AppGraph {
    * a screen gets an empty selection rather than an unhandled rejection.
    */
   readonly pickFiles: () => Promise<readonly PickedFile[]>;
-  /** Saves a received file, returning where it was written. */
-  readonly saveFile: (name: string, bytes: Uint8Array) => Promise<string>;
+  /**
+   * Saves a received file, returning where it was written.
+   *
+   * `directoryUri` is §5.6's download folder. Absent means the application's
+   * document directory.
+   */
+  readonly saveFile: (name: string, bytes: Uint8Array, directoryUri?: string) => Promise<string>;
+  /** Asks the user for a download folder (§5.6). `undefined` if cancelled. */
+  readonly pickDirectory: () => Promise<string | undefined>;
   /**
    * Records a finished transfer (A12-03, ADR-0007).
    *
@@ -341,6 +348,7 @@ export function createAppGraph(options: AppCompositionOptions = {}): AppGraph {
       ? {}
       : { cameraUnavailableReason: platform.unavailableReason }),
     pickFiles: files.pickFiles,
+    pickDirectory: files.pickDirectory,
     recordTransfer: (record) => history.save(record),
     recentTransfers: () => history.recent(),
     saveFile: files.saveFile,

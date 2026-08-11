@@ -20,9 +20,21 @@ export interface SettingsScreenProps {
   readonly onAbout: () => void;
   /** Protocol version, shown under Developer. */
   readonly protocolVersion?: number;
+  /**
+   * Opens the platform folder picker (§5.6).
+   *
+   * Injected: a screen owns no platform API. Absent where the platform has no
+   * picker, and the control is then not offered rather than offered and dead.
+   */
+  readonly onChooseFolder?: () => void;
 }
 
-export function SettingsScreen({ onBack, onAbout, protocolVersion = 1 }: SettingsScreenProps) {
+export function SettingsScreen({
+  onBack,
+  onAbout,
+  protocolVersion = 1,
+  onChooseFolder,
+}: SettingsScreenProps) {
   const { settings } = useAppServices();
   const state = useStore(settings.state);
   const current = state.settings;
@@ -85,10 +97,25 @@ export function SettingsScreen({ onBack, onAbout, protocolVersion = 1 }: Setting
             void settings.setKeepReceivedFiles(!current.storage.keepReceivedFiles);
           }}
         />
+        {/*
+          §5.6's download folder. The preference existed and nothing read or
+          wrote it: received files always went to the application's private
+          document directory, where a file manager cannot reach them.
+        */}
         <ListItem
           title="Download folder"
-          subtitle={current.storage.downloadDirectory ?? 'Platform default'}
+          subtitle={current.storage.downloadDirectory ?? 'App storage (private to photon)'}
+          {...(onChooseFolder === undefined ? {} : { trailing: 'Change', onPress: onChooseFolder })}
         />
+        {current.storage.downloadDirectory === undefined ? null : (
+          <Button
+            label="Use app storage"
+            variant="ghost"
+            onPress={() => {
+              void settings.setDownloadDirectory(undefined);
+            }}
+          />
+        )}
       </Section>
 
       <Section title="Security">
