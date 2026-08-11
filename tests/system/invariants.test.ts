@@ -16,6 +16,8 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 
+import { COMPLIANCE_DECLARATION, RequirementStatus } from '@config/compliance';
+
 import { CORPUS } from '../support/fileCorpus';
 import { bytesEqual, createHarness } from '../support/opticalHarness';
 
@@ -204,6 +206,73 @@ describe('§15.8 regression tests prevent fixed defects from reappearing', () =>
     );
 
     expect(routes).toContain('transfer.tsx');
+  });
+});
+
+describe('§29.14 the compliance declaration matches the build', () => {
+  /*
+   * A declaration that drifts from the implementation is worse than none: it
+   * is a claim about interoperability that nobody re-checks. These tests tie
+   * each statement to something observable.
+   */
+
+  it('claims no compliance level while a mandatory requirement is unmet', () => {
+    // §29.3 Level 1 requires every §29.13 item. If a future change implements
+    // version negotiation, this test fails and forces the claim to be revisited
+    // deliberately rather than left stale.
+    const unmet = COMPLIANCE_DECLARATION.checklist.filter(
+      (line) => line.status === RequirementStatus.Blocked,
+    );
+
+    expect(unmet.map((line) => line.requirement)).toEqual(['Version Negotiation']);
+    expect(COMPLIANCE_DECLARATION.complianceLevel).toBeNull();
+  });
+
+  it('declares the integrity algorithm the graph actually uses (§29.14)', () => {
+    const harness = createHarness();
+
+    expect(COMPLIANCE_DECLARATION.integrityAlgorithms).toContain(harness.graph.integrityAlgorithm);
+    expect(harness.graph.integrityAlgorithm).toBe('SHA-256');
+  });
+
+  it('declares no encryption, and the manifest agrees (§19.8)', () => {
+    const harness = createHarness();
+    harness.graph.send.addFiles([{ name: 'a.bin', content: Uint8Array.from([1, 2, 3]) }]);
+    harness.graph.send.prepare();
+
+    expect(COMPLIANCE_DECLARATION.encryptionAlgorithms).toEqual([]);
+
+    for (const entry of harness.graph.send.prepared()!.manifest.entries) {
+      expect(entry.encryption).toBe('NONE');
+    }
+  });
+
+  it('declares no compression, and the manifest agrees', () => {
+    const harness = createHarness();
+    harness.graph.send.addFiles([{ name: 'a.bin', content: Uint8Array.from([1, 2, 3]) }]);
+    harness.graph.send.prepare();
+
+    expect(COMPLIANCE_DECLARATION.compressionAlgorithms).toEqual([]);
+
+    for (const entry of harness.graph.send.prepared()!.manifest.entries) {
+      expect(entry.compression).toBe('NONE');
+    }
+  });
+
+  it('gives a reason for every requirement that is not implemented', () => {
+    // An unexplained "no" in a compliance declaration is an invitation to
+    // assume it is an oversight.
+    const unexplained = [
+      ...COMPLIANCE_DECLARATION.checklist,
+      ...COMPLIANCE_DECLARATION.optionalFeatures,
+    ].filter((line) => line.status !== RequirementStatus.Implemented && line.note === undefined);
+
+    expect(unexplained).toEqual([]);
+  });
+
+  it('names the protocol version the build speaks', () => {
+    expect(COMPLIANCE_DECLARATION.protocolVersion).toBe('OSP/1.0');
+    expect(createHarness().graph.protocolVersion).toBe(1);
   });
 });
 

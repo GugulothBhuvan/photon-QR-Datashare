@@ -31,7 +31,10 @@ import { bytesToHex } from '@utils/hex';
 import { createPacket } from '@domain/packet';
 import { fileId, sessionId } from '@domain/ids';
 
-import { captureOf, createHarness } from '../support/opticalHarness';
+import { createAppGraph, createMemorySettingsRepository } from '@config/appComposition';
+import { createMemoryCamera } from '@camera/memoryCamera';
+
+import { captureOf, createHarness, fixedClock, sequentialIds } from '../support/opticalHarness';
 
 const PACKET_SIZE = 128;
 
@@ -456,6 +459,26 @@ describe('confidentiality (§19)', () => {
 
     expect(parsed.ok).toBe(true);
     expect(parsed.validation.valid).toBe(true);
+  });
+  it('refuses a transfer configured for an algorithm it cannot perform (§19.14)', async () => {
+    // The safety property that matters while no cipher exists: a build asked
+    // for encryption must fail rather than transmit plain text under a manifest
+    // that claims otherwise.
+    const graph = createAppGraph({
+      clock: fixedClock,
+      idGenerator: sequentialIds('0e000000'),
+      camera: createMemoryCamera(),
+      settingsRepository: createMemorySettingsRepository(),
+      encryptionAlgorithm: 'AES-256-GCM',
+    });
+
+    graph.send.addFiles([{ name: 'secret.bin', content: Uint8Array.from([1, 2, 3, 4]) }]);
+    graph.send.prepare();
+
+    // Preparation fails, and it fails loudly rather than producing frames.
+    expect(graph.send.prepared()).toBeUndefined();
+    expect(graph.send.state.getState().stage).toBe('FAILED');
+    expect(graph.send.state.getState().errorMessage).toBeTruthy();
   });
 });
 

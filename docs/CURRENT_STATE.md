@@ -4,7 +4,7 @@
 what is true today. Every detail it points at is owned by another document,
 named in the last section.
 
-**Updated:** end of Milestone B (Phases 8–10).
+**Updated:** end of Milestone C (Phases 11–12).
 
 ---
 
@@ -22,6 +22,7 @@ Domain  →  Protocol  →  Binary  →  Transport  →  Adapters  →  UI
 | Binary | `src/core/packet/{header,footer,serializer,deserializer,crc32}` | Wire format |
 | Transport | `src/qr` | Encoding, rendering, scheduling, adaptation |
 | Adapters | `src/camera`, `src/storage` | Platform edges, reached only through ports |
+| Security | `src/security` | Cryptography; reachable only from the composition root |
 | Repositories | `src/repositories` | Durable persistence |
 | Services | `src/services` | Compose protocol with transport |
 | Controllers | `src/controllers` | Screen-facing workflow state; no React |
@@ -43,6 +44,9 @@ convention. Notable rules:
 - Controllers may not import React or any platform API.
 - Core may not import adapters, telemetry, events, state or hooks.
 - Adapters may not import core except `@core/errors` and `@core/contracts`.
+- **Nothing above the composition root may import `@security/*`** — core,
+  services, controllers and UI all talk to `IntegrityVerifier` and
+  `PayloadCipher`, so a key can never reach a packet by import.
 - `import/no-cycle` is an error everywhere.
 
 Boundary violations are build failures. They have been fixed by moving work
@@ -58,6 +62,9 @@ review — see `docs/CONTRACTS.md` §4.
 `PacketCodec` · `CameraAdapter` · `Clock` · `Logger` · `IdGenerator` ·
 `IntegrityVerifier`
 
+`PayloadCipher` was added in Phase 11 and is **not yet frozen** — no cipher
+implements it, so its shape has not been proven by use.
+
 ---
 
 ## 4. Protocol version
@@ -65,7 +72,9 @@ review — see `docs/CONTRACTS.md` §4.
 `PROTOCOL_VERSION = 1` (OSP/1.0), one byte on the wire.
 
 Version **negotiation is blocked** by SI-008: §23.3 requires `MAJOR.MINOR` and
-PACKET_SPEC §5 gives one byte. Compatibility policy: `docs/COMPATIBILITY.md`.
+PACKET_SPEC §5 gives one byte. Because §29.13 makes negotiation mandatory, **no
+compliance level is claimed** — see `docs/COMPLIANCE.md`. Compatibility policy:
+`docs/COMPATIBILITY.md`.
 
 ---
 
@@ -80,6 +89,9 @@ PACKET_SPEC §5 gives one byte. Compatibility policy: `docs/COMPATIBILITY.md`.
 - Reconstruction: packet map, file builder, integrity check
 - Recovery via natural repetition; resume from a partial transfer
 - Adaptive transport monitoring (recommendation only — see §6)
+- SHA-256 file integrity, from FIPS 180-4, pinned to its published vectors
+- Per-session security context, isolated and wiped on termination
+- An encryption seam that refuses algorithms it cannot perform
 - Full UI: 7 screens, 7 routes, theming, accessibility
 - End-to-end optical loopback in software
 
@@ -92,8 +104,10 @@ PACKET_SPEC §5 gives one byte. Compatibility policy: `docs/COMPATIBILITY.md`.
 | No device camera adapter; the receive preview is a placeholder | A12-01 |
 | No file picker; the Send route injects a no-op | A12-02 |
 | No history repository; history renders what it is given | A12-03 |
-| Integrity uses `PHOTON-PLACEHOLDER-32`, **not cryptographic** | A12-04 |
-| No encryption; Send and Settings report it as unavailable | §19 unread |
+| No encryption; the manifest records `NONE` and unsupported algorithms are refused | SI-012 |
+| No **authenticity**: an unkeyed hash proves the bytes, not the sender | A14-02 |
+| Session secrets live in ordinary memory; no keystore exists | A14-03 |
+| No compliance level may be claimed | SI-008, §29.13 |
 | Adaptive transport cannot close its loop — no back-channel | SI-010 |
 | No worker threads; lazy encoding used instead | SI-011 |
 | Manifest travels in-process, not optically — no wire format defined | A5-01 |
@@ -102,12 +116,12 @@ PACKET_SPEC §5 gives one byte. Compatibility policy: `docs/COMPATIBILITY.md`.
 
 ## 7. Specification issues
 
-Eleven recorded in `docs/SPEC_ISSUES.md`. **SI-008 is the only blocking one**
-and blocks version negotiation, which a v1.0 release needs (§29.13).
+Twelve recorded in `docs/SPEC_ISSUES.md`.
 
 `Working` — SI-001, SI-002, SI-005
 `Open` — SI-003, SI-004, SI-006, SI-007, SI-009, SI-010, SI-011
-`Open, blocking` — SI-008
+`Open, blocking a release` — **SI-008** (version negotiation, §29.13)
+`Open, blocking encryption` — **SI-012** (key exchange undefined)
 
 ---
 
@@ -121,8 +135,11 @@ Full ledger with rationale: `docs/IMPLEMENTATION_NOTES.md`. Open groups:
 | Protocol engine | A6-01…A6-03, A7-01…A7-04, A8-01…A8-03 | §13, §17, §24, §26 |
 | QR and camera | A9-01…A9-05, A10-01…A10-04 | QR_SPEC §16, Appendix A |
 | Reconstruction | A11-01…A11-04 | §13.16, §20 |
-| UI capability gaps | A12-01…A12-04 | Device work, §20 |
+| UI capability gaps | A12-01…A12-03 | Device work |
 | Performance | A13-01…A13-04 | Device measurement, TRD §25 |
+| Security | A14-01…A14-04 | §19 once SI-012 is resolved; a keystore dependency |
+
+A12-04 (the placeholder digest) was **resolved** in Phase 11 by SEC-003.
 
 ---
 
@@ -153,9 +170,9 @@ file corpus, including channels with loss, corruption and duplication.
 | `npm run typecheck` | Clean |
 | `npm run lint` | Clean — 0 errors, 0 warnings |
 | `npm run format:check` | Clean |
-| `npm test` | 1177 passing, 51 suites |
-| `npm run build:web` | Succeeds, 8 static routes |
-| Statement coverage | 93.9% (branch 89.6%, function 90.9%) |
+| `npm test` | 1239 passing, 53 suites |
+| `npm run build:web` | Succeeds, 9 static routes |
+| Native production build | **Device validation required** — needs EAS or a native toolchain |
 
 Coverage is reported, not targeted. `tests/system/invariants.test.ts` enforces
 the property that matters: every public module is exercised by some test, with
@@ -165,11 +182,12 @@ exemptions listed and justified.
 
 ## 11. Milestones
 
-**Current:** Milestone B complete — Phase 8 (UI), Phase 9 (Testing),
-Phase 10 (Performance).
+**Current:** Milestone C complete — Phase 11 (Security), Phase 12 (Release).
+All twelve phases are implemented.
 
-**Next:** Milestone C — Phase 11 (Security), Phase 12 (Release), final
-validation.
+**Next:** device validation. Nothing has run on a handset; §9 above is the
+list. After that, the specification changes SI-008 and SI-012 need before a
+compliant v1.0 is possible.
 
 ---
 
@@ -183,5 +201,7 @@ validation.
 | A defect in the specification | `docs/SPEC_ISSUES.md` |
 | A decision that became permanent | `docs/decisions/` |
 | What may change and what may not | `docs/COMPATIBILITY.md`, `docs/CONTRACTS.md` |
+| What this build claims to conform to | `docs/COMPLIANCE.md` |
+| What shipped, and what did not | `docs/RELEASE_NOTES.md` |
 | Module dependencies | `ARCHITECTURE_GRAPH.md`, `planning/DEPENDENCIES.md` |
 | How to work in this repository | `AGENTS.md` |

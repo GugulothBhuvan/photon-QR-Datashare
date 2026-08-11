@@ -41,7 +41,8 @@ import { createTransferService } from '@services/transferService';
 
 import { bytesToHex } from '@utils/hex';
 
-import { createDisabledCipher } from '@security/cipher';
+import { NONE } from '@domain/manifest';
+import { cipherFor } from '@security/cipher';
 import { createSha256Verifier } from '@security/integrity';
 
 import { defaultAppConfig, type AppConfig } from './appConfig';
@@ -76,6 +77,13 @@ export interface AppCompositionOptions {
   readonly verifier?: IntegrityVerifier;
   /** Defaults to the disabled cipher (§19.4). */
   readonly cipher?: PayloadCipher;
+  /**
+   * The encryption algorithm for the session (§19.12).
+   *
+   * Defaults to `NONE`. Any other value selects a cipher that refuses, because
+   * no cipher is implemented — see SI-012.
+   */
+  readonly encryptionAlgorithm?: string;
   readonly camera?: MemoryCamera;
   readonly settingsRepository?: ValueRepository<AppConfig>;
 }
@@ -141,9 +149,11 @@ export function createAppGraph(options: AppCompositionOptions = {}): AppGraph {
   const manifests = createManifestManager();
   const packets = createPacketManager();
 
-  // §19.4 Disabled. OSP/1.0 in this build performs no encryption; see
-  // `src/security/cipher.ts` and SI-012 for what blocks it.
-  const cipher = options.cipher ?? createDisabledCipher();
+  // §19.12 negotiates the algorithm; this build has no negotiation, so it is
+  // configured. `NONE` yields a working cipher and anything else yields one
+  // that refuses — a build configured for an algorithm it cannot perform must
+  // fail, not quietly transmit plain text (§19.14).
+  const cipher = options.cipher ?? cipherFor(options.encryptionAlgorithm ?? NONE);
 
   const transfers = createTransferService({
     sessions,
