@@ -53,6 +53,8 @@ const EXEMPT: Readonly<Record<string, string>> = {
   'ports.ts': 'Interface declarations only.',
   'repository.ts': 'Interface declarations only.',
   'cameraPort.ts': 'Covered by camera suites; the port itself is mostly declarations.',
+  'visionCamera.tsx':
+    'The VisionCamera binding. Importing it pulls in the NitroModules TurboModule, which exists only in a native runtime and throws under Node. The logic worth testing lives in deviceCamera.ts (ADR-0005).',
 };
 
 /** Source modules that must be reachable from some test. */

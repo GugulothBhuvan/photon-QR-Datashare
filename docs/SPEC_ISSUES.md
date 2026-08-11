@@ -417,6 +417,84 @@ result, and SECURITY.md §8 should say which party generates the key.
 
 ---
 
+## SI-013 — The sanctioned camera technology cannot return the payload bytes §14 requires
+
+| | |
+| --- | --- |
+| **Document** | `TRD.md`, with `QR_SPEC.md` |
+| **Section** | TRD §3 Technology Stack (Camera), with QR_SPEC §14 QR Detection |
+| **Status** | `Open` — blocking real camera capture |
+
+**Description.** TRD §3 names `expo-camera` as the MVP camera. QR_SPEC §14
+requires the decoder to "Decode payload **bytes**" and states that "Decoded
+payloads SHALL be forwarded **unchanged** to the Packet Layer."
+
+`expo-camera` cannot do this. Its published type surface (verified against
+`expo-camera@57.0.3`, the version matching this project's Expo SDK) offers
+exactly two ways to get anything out of the camera, and neither yields bytes:
+
+| API | Returns | Problem |
+| --- | --- | --- |
+| `onBarcodeScanned` | `{ data: string, raw?: string }` | Both fields are **strings**. There is no `Uint8Array`, `ArrayBuffer` or byte accessor anywhere in the package's declarations. |
+| `takePictureAsync` | `CameraCapturedPicture` with `format: 'jpg' \| 'png'` | A compressed image, not pixels. Getting pixels needs a JPEG/PNG decoder that is not in the technology stack. |
+
+There is no raw-frame API at all: the package declares no `onFrame`, no
+`frameProcessor` and no pixel accessor.
+
+QR_SPEC §12 adds a second requirement the same API cannot meet: the receiver
+SHOULD "continuously capture frames" and "decode frames as quickly as
+practical". `takePictureAsync` is still capture, not continuous capture.
+
+**Verified, not assumed.** The type surface above was read from the published
+`expo-camera@57.0.3` tarball — the version matching this project's Expo SDK 57.
+No camera package is installed in the project at all: the dependency set
+contains `jsqr` (a decoder that takes pixel buffers) and the `CameraAdapter`
+port, and nothing that can produce frames on a device. `react-native-worklets`
+is present, but only as a transitive dependency of `react-native-reanimated`
+via `expo-router` — no frame-processor camera uses it.
+
+So there is **no existing supported path in the project**, and the protocol
+requirement cannot be satisfied by the technology TRD §3 names.
+
+**Why a string is not merely inconvenient.** Photon's packets are arbitrary
+binary — a 50-byte header, raw payload bytes and a CRC footer, encoded as QR
+byte-mode segments (ADR-0002). Arbitrary bytes are not valid UTF-8. Passing
+them through a string replaces every invalid sequence with U+FFFD and changes
+the byte length, so the packet fails CRC validation if it survives parsing at
+all. "Forwarded unchanged" is precisely what a string cannot do.
+
+This is the same class of defect ADR-0002 resolved on the encoding side, where
+a text-oriented QR library was replaced to keep byte segments intact. The
+decoding side now hits it from the other direction.
+
+**Impact.** The `CameraAdapter` contract streams `CameraFrame` pixel buffers to
+JavaScript, and `jsQR` decodes them — an architecture that satisfies §14
+exactly. No sanctioned dependency can produce those buffers on a device. Real
+camera capture is therefore blocked on a technology decision, not on
+implementation effort.
+
+**Not worked around.** No adapter was written that decodes to a string and
+hopes, and none that silently narrows the protocol to text-safe payloads.
+Either would satisfy a demo and corrupt real transfers.
+
+**Suggested resolution.** One of:
+
+1. Name a frame-processor capable camera in TRD §3 — `react-native-vision-camera`
+   with frame processors is the usual choice, and this project already carries
+   `react-native-worklets`, which such processors need.
+2. Keep `expo-camera` and add a native module that exposes ML Kit's
+   `Barcode.getRawBytes()`, which does return bytes on Android but is not
+   surfaced by `expo-camera`.
+3. Accept still-capture: `takePictureAsync` plus a JPEG decoder yields real
+   pixels and satisfies §14, at a capture rate far below the 100–350 ms per
+   frame QR_SPEC §9 paces the sender at. This would need §9 to admit a slow
+   receiver, or the sender to hold each frame far longer.
+
+Option 1 preserves both §14 and §9. Options 2 and 3 each need another
+specification change.
+
+---
+
 # 4. Index By Document
 
 | Document | Issues |
@@ -424,8 +502,9 @@ result, and SECURITY.md §8 should say which party generates the key.
 | `PROTOCOL_SPEC.md` | SI-001, SI-002, SI-004, SI-005, SI-006, SI-007, SI-009, SI-010, SI-012 |
 | `STATE_MACHINES.md` | SI-003 |
 | `PACKET_SPEC.md` | SI-008 (jointly with PROTOCOL_SPEC) |
-| `TRD.md` | SI-010 (jointly with PROTOCOL_SPEC), SI-011 (jointly with IMPLEMENTATION_PLAN) |
+| `TRD.md` | SI-010 (jointly with PROTOCOL_SPEC), SI-011 (jointly with IMPLEMENTATION_PLAN), SI-013 (jointly with QR_SPEC) |
 | `SECURITY.md` | SI-012 (jointly with PROTOCOL_SPEC) |
+| `QR_SPEC.md` | SI-013 (jointly with TRD) |
 | `planning/IMPLEMENTATION_PLAN.md` | SI-011 |
 
 # 5. Index By Status
@@ -435,6 +514,7 @@ result, and SECURITY.md §8 should say which party generates the key.
 | `Working` | SI-001, SI-002, SI-005 |
 | `Open` | SI-003, SI-004, SI-006, SI-007, SI-009, SI-010, SI-011 |
 | `Open` — blocking for encryption | SI-012 |
+| `Open` — blocking real camera capture | SI-013 |
 | `Open` — **blocking** | **SI-008** |
 | `Resolved` | — |
 | `Withdrawn` | — |

@@ -4,7 +4,7 @@
 what is true today. Every detail it points at is owned by another document,
 named in the last section.
 
-**Updated:** end of Milestone C (Phases 11–12).
+**Updated:** Milestone D (hardware validation), in progress.
 
 ---
 
@@ -101,7 +101,7 @@ compliance level is claimed** — see `docs/COMPLIANCE.md`. Compatibility policy
 
 | Limitation | Reference |
 | --- | --- |
-| No device camera adapter; the receive preview is a placeholder | A12-01 |
+| No device camera adapter; the receive preview is a placeholder | A12-01, SI-013 |
 | No file picker; the Send route injects a no-op | A12-02 |
 | No history repository; history renders what it is given | A12-03 |
 | No encryption; the manifest records `NONE` and unsupported algorithms are refused | SI-012 |
@@ -116,12 +116,13 @@ compliance level is claimed** — see `docs/COMPLIANCE.md`. Compatibility policy
 
 ## 7. Specification issues
 
-Twelve recorded in `docs/SPEC_ISSUES.md`.
+Thirteen recorded in `docs/SPEC_ISSUES.md`.
 
 `Working` — SI-001, SI-002, SI-005
 `Open` — SI-003, SI-004, SI-006, SI-007, SI-009, SI-010, SI-011
 `Open, blocking a release` — **SI-008** (version negotiation, §29.13)
 `Open, blocking encryption` — **SI-012** (key exchange undefined)
+`Open, blocking real camera capture` — **SI-013** (no byte-accurate camera API)
 
 ---
 
@@ -160,6 +161,12 @@ A12-04 (the placeholder digest) was **resolved** in Phase 11 by SEC-003.
 
 Transfer success (TRD §34, >99%) **is** verified in software: 100% across the
 file corpus, including channels with loss, corruption and duplication.
+
+**Milestone D status:** none of the above has been measured. No Android phone
+was available. The Android native build was fixed and a development APK is
+produced for `arm64-v8a`; the emulator was deliberately skipped. Real camera
+capture is blocked by **SI-013** — a native-library decision, not missing work.
+Full record: `docs/HARDWARE_VALIDATION.md`.
 
 ---
 
