@@ -465,6 +465,39 @@ describe('Receive camera availability (Stage 0)', () => {
     expect(screen.queryByText('Camera unavailable on this device')).toBeNull();
   });
 
+  it('reports what arrived instead of saving silently (§5.3)', async () => {
+    // Files used to be written with nothing said about it, which left a
+    // completed transfer and a failed write looking identical.
+    const graph = makeGraph();
+
+    await render(
+      wrap(
+        graph,
+        <ReceiveScreen
+          onBack={jest.fn()}
+          received={[
+            {
+              name: 'holiday.jpg',
+              size: 2048,
+              verified: true,
+              savedTo: 'file:///docs/holiday.jpg',
+            },
+            { name: 'broken.bin', size: 10, verified: false },
+          ]}
+        />,
+      ),
+    );
+
+    await act(async () => {
+      await graph.receive.requestPermission();
+    });
+
+    expect(screen.getByText('holiday.jpg')).toBeOnTheScreen();
+    expect(screen.getByText('file:///docs/holiday.jpg')).toBeOnTheScreen();
+    // §20.14: a file that failed verification is reported, not quietly missing.
+    expect(screen.getByText('Failed verification — discarded')).toBeOnTheScreen();
+  });
+
   it('surfaces a session failure from a camera that did load', async () => {
     // A camera that loads and then fails to start is the case a static
     // `cameraUnavailableReason` cannot describe: the failure arrives after the

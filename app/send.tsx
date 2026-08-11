@@ -11,12 +11,13 @@
  */
 import { useRouter } from 'expo-router';
 
+import { TransferDirection, TransferOutcome } from '@domain/history';
 import { useAppServices } from '@hooks/index';
 import { SendScreen } from '@screens/index';
 
 export default function SendRoute() {
   const router = useRouter();
-  const { send, pickFiles } = useAppServices();
+  const { send, pickFiles, recordTransfer } = useAppServices();
 
   return (
     <SendScreen
@@ -28,6 +29,28 @@ export default function SendRoute() {
         });
       }}
       onBack={() => router.back()}
+      onCancel={() => {
+        // Read before cancelling: the controller resets to its initial state,
+        // and the session id and file list are what the record is made of.
+        const { sessionId, files } = send.state.getState();
+
+        if (sessionId !== undefined && files.length > 0) {
+          void recordTransfer({
+            sessionId,
+            direction: TransferDirection.Send,
+            // §5.5 wants an outcome and this one is genuinely not knowable:
+            // the optical transport has no return path (SI-014), so a sender
+            // shows its frames and never learns whether anything read them.
+            // Recording `Completed` would assert what nothing observed.
+            outcome: TransferOutcome.Unknown,
+            completedAt: Date.now(),
+            files: files.map((file) => ({ name: file.name, size: file.content.byteLength })),
+            totalBytes: files.reduce((total, file) => total + file.content.byteLength, 0),
+          });
+        }
+
+        send.cancel();
+      }}
     />
   );
 }

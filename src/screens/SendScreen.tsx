@@ -34,6 +34,15 @@ export interface SendScreenProps {
   readonly onBack: () => void;
   /** Rendering width for the QR frame, in points. */
   readonly frameSize?: number;
+  /**
+   * Ends the transfer, replacing the default `cancel`.
+   *
+   * Injected so the route can record the transfer before the controller
+   * resets — cancelling clears the session id and the file list, which is
+   * exactly what a history record is made of. The screen still has one Cancel
+   * button; what happens behind it is the route's business.
+   */
+  readonly onCancel?: () => void;
 }
 
 /**
@@ -49,7 +58,7 @@ const SPEEDS: readonly { readonly value: QRSpeedPreference; readonly label: stri
     { value: QRSpeedPreference.Fast, label: 'Fast' },
   ]);
 
-export function SendScreen({ onPickFiles, onBack, frameSize = 280 }: SendScreenProps) {
+export function SendScreen({ onPickFiles, onBack, frameSize = 280, onCancel }: SendScreenProps) {
   const { send } = useAppServices();
   const state = useStore(send.state);
 
@@ -112,7 +121,7 @@ export function SendScreen({ onPickFiles, onBack, frameSize = 280 }: SendScreenP
             onPress={state.stage === SendStage.Paused ? send.start : send.pause}
           />
           <Button label="Restart" variant="ghost" onPress={send.restart} />
-          <Button label="Cancel" variant="danger" onPress={send.cancel} />
+          <Button label="Cancel" variant="danger" onPress={onCancel ?? send.cancel} />
         </View>
 
         <Card>

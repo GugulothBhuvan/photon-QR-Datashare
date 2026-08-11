@@ -44,8 +44,10 @@ import { createSendController } from '@controllers/sendController';
 import { createSettingsController } from '@controllers/settingsController';
 
 import { protocolVersion as toProtocolVersion } from '@domain/ids';
+import type { TransferRecord } from '@domain/history';
 
 import type { ValueRepository } from '@repositories/repository';
+import { createHistoryRepository } from '@repositories/historyRepository';
 import { createValueRepository } from '@repositories/valueRepository';
 
 import { createDiscoveryService } from '@services/discoveryService';
@@ -177,6 +179,15 @@ export interface AppGraph {
   /** Saves a received file, returning where it was written. */
   readonly saveFile: (name: string, bytes: Uint8Array) => Promise<string>;
   /**
+   * Records a finished transfer (A12-03, ADR-0007).
+   *
+   * A plain function rather than the repository, so the UI stores a transfer
+   * without importing the repository layer — the same shape `saveFile` takes.
+   */
+  readonly recordTransfer: (record: TransferRecord) => Promise<void>;
+  /** Finished transfers, newest first (ADR-0007). */
+  readonly recentTransfers: () => Promise<readonly TransferRecord[]>;
+  /**
    * What the platform actually provided.
    *
    * Present so a handset can report which native capabilities resolved and why
@@ -238,6 +249,9 @@ export function createAppGraph(options: AppCompositionOptions = {}): AppGraph {
   // a test supplies its own settings repository, because the About screen
   // reports whether storage is persistent either way.
   const storage = createDeviceStorage();
+
+  // A12-03: transfer history, bounded and ordered by ADR-0007.
+  const history = createHistoryRepository({ store: storage.store });
 
   const sessions = createSessionManager({
     clock,
@@ -327,6 +341,8 @@ export function createAppGraph(options: AppCompositionOptions = {}): AppGraph {
       ? {}
       : { cameraUnavailableReason: platform.unavailableReason }),
     pickFiles: files.pickFiles,
+    recordTransfer: (record) => history.save(record),
+    recentTransfers: () => history.recent(),
     saveFile: files.saveFile,
     now: () => clock.now(),
     integrityAlgorithm: verifier.algorithm,

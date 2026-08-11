@@ -157,27 +157,35 @@ frame rate, QR detection rate, dropped frames, thermal behaviour, startup.
 
 None of this blocks a transfer; all of it blocks a *product*.
 
-### 3.1 Transfer history `[A12-03]`
+### 3.1 Transfer history `[A12-03]` — DONE
 
-A repository behind the existing screen, plus a retention policy. No section
-read so far defines what is stored or for how long — that is a product decision
-to record.
+`historyRepository.ts` behind the existing screen. What a record holds, the
+list order and the retention limit are all product decisions §5.5 leaves open,
+recorded in **ADR-0007**: metadata only, newest first, most recent 100, pruned
+on write.
 
-### 3.2 Settings persistence
+Sends are recorded with outcome `UNKNOWN`, not `COMPLETED`. The optical
+transport has no return path (SI-014), so a sender never learns whether
+anything read its frames, and recording success would assert what nothing
+observed.
 
-Settings are in-memory and reset on every launch. The `ValueRepository`
-abstraction and a key-value store already exist; this is wiring plus a storage
-adapter backed by the file system.
+### 3.2 Settings persistence — DONE
+
+`fileKeyValueStore.ts` plus `deviceStorage.ts`. One JSON file, read whole at
+startup and written through on change; the policy is injected a `TextFile` so
+it is tested in Node. A corrupt file starts empty and reports it rather than
+refusing to launch. About says whether storage is persistent.
 
 ### 3.3 Received-file destination
 
 Files save to the app's document directory. §5.6's storage preferences let a
 user choose, and that choice is currently ignored.
 
-### 3.4 Received-file review
+### 3.4 Received-file review — DONE
 
-The Receive screen should show what arrived, whether each verified, and where it
-was saved — instead of saving silently.
+The Receive screen lists what arrived, whether each verified, and where it was
+written. A file that failed verification is listed as discarded rather than
+left missing (§20.14), and a write that fails says so.
 
 ---
 

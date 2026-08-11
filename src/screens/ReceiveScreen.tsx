@@ -18,6 +18,7 @@ import {
   Button,
   Card,
   ErrorState,
+  ListItem,
   LoadingState,
   ProgressRing,
   Screen,
@@ -29,9 +30,30 @@ import { useAppServices, useStore } from '@hooks/index';
 import { useTheme } from '@components/ThemeProvider';
 import { createStore } from '@state/store';
 
+/** One file that arrived, as the receive screen reports it. */
+export interface ReceivedFile {
+  readonly name: string;
+  readonly size: number;
+  /** Whether its integrity check passed (§3.24). */
+  readonly verified: boolean;
+  /** Where it was written. Absent when it failed and was discarded. */
+  readonly savedTo?: string;
+}
+
 export interface ReceiveScreenProps {
   readonly onBack: () => void;
   readonly onComplete?: () => void;
+  /**
+   * What arrived, once the user has saved (§5.3).
+   *
+   * Saving used to happen silently: files were written and nothing said so,
+   * which left no way to tell a completed transfer from one that had failed to
+   * write. A file that failed verification is listed too — a user whose file
+   * did not verify needs to be told, not left to find it missing.
+   */
+  readonly received?: readonly ReceivedFile[];
+  /** Why saving failed, when it did. */
+  readonly saveError?: string;
 }
 
 /**
@@ -43,7 +65,12 @@ export interface ReceiveScreenProps {
  */
 const NO_CAMERA_ERRORS = createStore<string | undefined>(undefined);
 
-export function ReceiveScreen({ onBack, onComplete }: ReceiveScreenProps) {
+export function ReceiveScreen({
+  onBack,
+  onComplete,
+  received = [],
+  saveError,
+}: ReceiveScreenProps) {
   const {
     receive,
     cameraPreview: CameraPreview,
@@ -182,7 +209,38 @@ export function ReceiveScreen({ onBack, onComplete }: ReceiveScreenProps) {
         )}
       </Card>
 
-      {state.stage === ReceiveStage.Complete && onComplete !== undefined ? (
+      {/*
+        §5.3: what arrived, whether it verified, and where it went. Saving
+        used to happen silently, which left a completed transfer and a failed
+        write looking identical.
+      */}
+      {received.length === 0 ? null : (
+        <Card>
+          <Text variant="heading">Received</Text>
+          {received.map((file) => (
+            <ListItem
+              key={file.name}
+              title={file.name}
+              subtitle={
+                file.verified
+                  ? (file.savedTo ?? `${String(file.size)} bytes`)
+                  : 'Failed verification — discarded'
+              }
+              trailing={file.verified ? 'Verified' : 'Failed'}
+            />
+          ))}
+        </Card>
+      )}
+
+      {saveError === undefined ? null : (
+        <Text variant="caption" tone="danger">
+          {`Could not save: ${saveError}`}
+        </Text>
+      )}
+
+      {state.stage === ReceiveStage.Complete &&
+      onComplete !== undefined &&
+      received.length === 0 ? (
         <Button label="Save files" onPress={onComplete} fullWidth />
       ) : null}
 

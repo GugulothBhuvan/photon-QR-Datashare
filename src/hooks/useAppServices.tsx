@@ -16,6 +16,7 @@ import type { ReceiveController } from '@controllers/receiveController';
 import type { SendController } from '@controllers/sendController';
 import type { SettingsController } from '@controllers/settingsController';
 import type { Store } from '@state/store';
+import type { TransferRecord } from '@domain/history';
 
 /** Everything a screen may reach. Controllers only — never a service directly. */
 export interface AppServices {
@@ -53,6 +54,10 @@ export interface AppServices {
   readonly pickFiles: () => Promise<readonly { name: string; content: Uint8Array }[]>;
   /** Saves a received file, returning where it was written. */
   readonly saveFile: (name: string, bytes: Uint8Array) => Promise<string>;
+  /** Records a finished transfer (A12-03, ADR-0007). */
+  readonly recordTransfer: (record: TransferRecord) => Promise<void>;
+  /** Finished transfers, newest first (ADR-0007). */
+  readonly recentTransfers: () => Promise<readonly TransferRecord[]>;
   /** What the platform provided, and why anything missing is missing. */
   readonly diagnostics?: readonly { readonly name: string; readonly status: string }[];
 }

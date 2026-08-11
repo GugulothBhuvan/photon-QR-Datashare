@@ -16,7 +16,7 @@ export {
   type HistoryScreenProps,
 } from './HistoryScreen';
 export { HomeScreen, type HomeScreenProps, type RecentTransfer } from './HomeScreen';
-export { ReceiveScreen, type ReceiveScreenProps } from './ReceiveScreen';
+export { ReceiveScreen, type ReceivedFile, type ReceiveScreenProps } from './ReceiveScreen';
 export { SendScreen, type SendScreenProps } from './SendScreen';
 export { SettingsScreen, type SettingsScreenProps } from './SettingsScreen';
 export {
