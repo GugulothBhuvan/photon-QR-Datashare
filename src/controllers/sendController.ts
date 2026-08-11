@@ -134,6 +134,18 @@ export interface SendController {
 
   /** Builds the manifest and encodes every frame (§5.2 Start Transfer). */
   prepare(): void;
+
+  /**
+   * Prepares a transfer and begins transmitting it (§5.2's Start Transfer).
+   *
+   * §5.2 specifies **one** start button, so one tap must reach a state that
+   * displays codes. `prepare` alone leaves the session at `Ready`, which the
+   * send screen renders as the file list — so a user who tapped Start saw
+   * nothing happen. Found on hardware, not in the suite, because every test
+   * called `prepare` and `start` itself and so never exercised the gap
+   * between them.
+   */
+  beginTransfer(): void;
   /** Begins transmission. */
   start(): void;
   /** Pauses transmission (§5.4 Pause). */
@@ -168,6 +180,85 @@ export function createSendController(options: SendControllerOptions): SendContro
 
     const { index, frameCount, durationMs } = scheduler.state();
     state.setState((previous) => ({ ...previous, position: { index, frameCount, durationMs } }));
+  }
+
+  /**
+   * Declared as local functions, not methods.
+   *
+   * The send screen passes these straight to a button's `onPress`, which
+   * detaches them from the controller object — a method body relying on `this`
+   * throws the moment it is used the way the UI uses it. That is exactly how
+   * `beginTransfer` broke first time round.
+   */
+  function prepareTransfer(): void {
+    const current = state.getState();
+
+    if (current.files.length === 0) {
+      return;
+    }
+
+    state.setState((previous) => ({
+      ...previous,
+      stage: SendStage.Preparing,
+      errorMessage: undefined,
+    }));
+
+    try {
+      preparedTransfer = transfers.prepare({
+        files: current.files,
+        packetSize: current.packetSize,
+        level: current.level,
+        rate: FRAME_RATE_FOR_PREFERENCE[current.speed],
+        integrityAlgorithm,
+        hashFile,
+      });
+
+      const position = preparedTransfer.scheduler.state();
+
+      state.setState((previous) => ({
+        ...previous,
+        stage: SendStage.Ready,
+        sessionId: preparedTransfer?.sessionId,
+        totalPackets: preparedTransfer?.totalPackets ?? 0,
+        position: {
+          index: position.index,
+          frameCount: position.frameCount,
+          durationMs: position.durationMs,
+        },
+      }));
+    } catch (error: unknown) {
+      // §6.11: only a user-safe representation reaches the screen.
+      state.setState((previous) => ({
+        ...previous,
+        stage: SendStage.Failed,
+        errorMessage: toUserMessage(error),
+      }));
+    }
+  }
+
+  function startTransmission(): void {
+    const { sessionId, stage } = state.getState();
+
+    if (sessionId === undefined || preparedTransfer === undefined) {
+      return;
+    }
+
+    // Resuming and beginning are different transitions. §5.4's one button
+    // does both, so the controller decides which — a paused session is past
+    // Waiting and Handshake, and asking it for them would fail.
+    const started =
+      stage === SendStage.Paused ? transfers.resume(sessionId) : transfers.begin(sessionId);
+
+    if (started) {
+      state.setState((previous) => ({
+        ...previous,
+        stage: SendStage.Sending,
+        // Resuming keeps the original start time: §5.4's elapsed time is how
+        // long the transfer has been going, not how long since the last
+        // resume.
+        startedAt: previous.startedAt ?? clock.now(),
+      }));
+    }
   }
 
   return {
@@ -230,76 +321,20 @@ export function createSendController(options: SendControllerOptions): SendContro
       publishPosition();
     },
 
-    prepare() {
-      const current = state.getState();
+    prepare: prepareTransfer,
 
-      if (current.files.length === 0) {
-        return;
-      }
+    beginTransfer() {
+      prepareTransfer();
 
-      state.setState((previous) => ({
-        ...previous,
-        stage: SendStage.Preparing,
-        errorMessage: undefined,
-      }));
-
-      try {
-        preparedTransfer = transfers.prepare({
-          files: current.files,
-          packetSize: current.packetSize,
-          level: current.level,
-          rate: FRAME_RATE_FOR_PREFERENCE[current.speed],
-          integrityAlgorithm,
-          hashFile,
-        });
-
-        const position = preparedTransfer.scheduler.state();
-
-        state.setState((previous) => ({
-          ...previous,
-          stage: SendStage.Ready,
-          sessionId: preparedTransfer?.sessionId,
-          totalPackets: preparedTransfer?.totalPackets ?? 0,
-          position: {
-            index: position.index,
-            frameCount: position.frameCount,
-            durationMs: position.durationMs,
-          },
-        }));
-      } catch (error: unknown) {
-        // §6.11: only a user-safe representation reaches the screen.
-        state.setState((previous) => ({
-          ...previous,
-          stage: SendStage.Failed,
-          errorMessage: toUserMessage(error),
-        }));
+      // `prepare` is synchronous, so the stage is already settled. Starting is
+      // conditional on it having succeeded: a failed preparation must stay on
+      // its error state rather than being driven onward.
+      if (state.getState().stage === SendStage.Ready) {
+        startTransmission();
       }
     },
 
-    start() {
-      const { sessionId, stage } = state.getState();
-
-      if (sessionId === undefined || preparedTransfer === undefined) {
-        return;
-      }
-
-      // Resuming and beginning are different transitions. §5.4's one button
-      // does both, so the controller decides which — a paused session is past
-      // Waiting and Handshake, and asking it for them would fail.
-      const started =
-        stage === SendStage.Paused ? transfers.resume(sessionId) : transfers.begin(sessionId);
-
-      if (started) {
-        state.setState((previous) => ({
-          ...previous,
-          stage: SendStage.Sending,
-          // Resuming keeps the original start time: §5.4's elapsed time is how
-          // long the transfer has been going, not how long since the last
-          // resume.
-          startedAt: previous.startedAt ?? clock.now(),
-        }));
-      }
-    },
+    start: startTransmission,
 
     pause() {
       const { sessionId } = state.getState();

@@ -198,6 +198,38 @@ describe('§15.8 regression tests prevent fixed defects from reappearing', () =>
     expect(['SLOW', 'BALANCED', 'FAST']).toContain(state.speed);
   });
 
+  it('one tap on Start transfer reaches a state that displays codes', async () => {
+    // Found on a physical device, not in this suite. `prepare` leaves the
+    // session at Ready, and the send screen renders the QR view only for
+    // Sending or Paused — so Start transfer prepared a transfer that never
+    // began, and the screen redrew the file list. Every existing test called
+    // `prepare` and `start` itself, so none of them crossed the gap between.
+    const harness = createHarness({ packetSize: 128 });
+
+    harness.graph.send.addFiles([
+      { name: 'a.bin', content: Uint8Array.from({ length: 400 }, (_u, i) => i & 0xff) },
+    ]);
+
+    // Detached from the controller, which is how a button's `onPress` calls it.
+    // Calling it as a method would hide a `this` dependency that breaks in the UI.
+    const { beginTransfer } = harness.graph.send;
+    beginTransfer();
+
+    expect(harness.graph.send.state.getState().stage).toBe('SENDING');
+    expect(harness.graph.send.currentFrame(280)).toBeDefined();
+  });
+
+  it('a failed preparation is not driven onward into sending', () => {
+    // The other half: one tap must not force a broken transfer into a state
+    // that displays codes it does not have.
+    const harness = createHarness({ packetSize: 128 });
+
+    // No files selected, so preparation cannot produce anything.
+    harness.graph.send.beginTransfer();
+
+    expect(harness.graph.send.state.getState().stage).not.toBe('SENDING');
+  });
+
   it('every declared route has a module behind it', () => {
     // Found by the Phase 8 route sweep: `Route.Transfer` existed with no
     // `app/transfer.tsx`, so a screen that passed its own tests was

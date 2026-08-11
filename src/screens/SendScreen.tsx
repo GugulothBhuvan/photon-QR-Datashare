@@ -177,7 +177,7 @@ export function SendScreen({ onPickFiles, onBack, frameSize = 280 }: SendScreenP
 
       <Button
         label="Start transfer"
-        onPress={send.prepare}
+        onPress={send.beginTransfer}
         disabled={state.files.length === 0}
         fullWidth
       />

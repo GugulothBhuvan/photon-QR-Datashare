@@ -215,7 +215,7 @@ describe('Send (UI-003, §5.2)', () => {
     expect(screen.getByRole('button', { name: 'Start transfer' })).not.toBeDisabled();
   });
 
-  it('prepares a real transfer and displays a QR frame', async () => {
+  it('starts a real transfer and shows the codes on one press (§5.2)', async () => {
     const graph = makeGraph();
     graph.send.addFiles([
       { name: 'payload.bin', content: Uint8Array.from({ length: 900 }, (_u, i) => i & 0xff) },
@@ -227,13 +227,22 @@ describe('Send (UI-003, §5.2)', () => {
     await user.press(screen.getByRole('button', { name: 'Start transfer' }));
 
     // The controller ran the real service: session, manifest, packets, frames.
+    //
+    // This asserted `Ready` until a physical device showed why that was wrong:
+    // §5.2 has one start button, and `Ready` is the stage the send screen
+    // renders as the *file list*. A transfer that stopped there looked to a
+    // user exactly like a button that did nothing. Asserting the intermediate
+    // stage made a passing test out of a broken screen.
     await waitFor(() => {
-      expect(graph.send.state.getState().stage).toBe(SendStage.Ready);
+      expect(graph.send.state.getState().stage).toBe(SendStage.Sending);
     });
 
     const prepared = graph.send.prepared();
     expect(prepared?.frames.count).toBeGreaterThan(1);
     expect(prepared?.totalPackets).toBe(prepared?.frames.count);
+
+    // And the screen is actually showing a code, not merely holding one.
+    expect(screen.getByLabelText('QR frame')).toBeOnTheScreen();
   });
 
   it('renders the frame once transmitting', async () => {
