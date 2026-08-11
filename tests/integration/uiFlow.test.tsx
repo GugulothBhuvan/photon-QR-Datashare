@@ -240,7 +240,8 @@ describe('Send (UI-003, §5.2)', () => {
 
     const prepared = graph.send.prepared();
     expect(prepared?.frames.count).toBeGreaterThan(1);
-    expect(prepared?.totalPackets).toBe(prepared?.frames.count);
+    // Frames exceed packets by the two-frame preamble §7.5 and §7.6 require.
+    expect(prepared?.frames.count).toBe((prepared?.totalPackets ?? 0) + 2);
 
     // And the screen is actually showing a code, not merely holding one.
     expect(screen.getByLabelText('QR frame')).toBeOnTheScreen();

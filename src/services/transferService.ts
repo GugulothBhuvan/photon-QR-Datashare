@@ -22,6 +22,10 @@ import type { Clock, IdGenerator, PayloadCipher } from '@core/contracts';
 import type { ManifestManager } from '@core/manifest/manifestManager';
 import type { PacketManager } from '@core/packet/packetManager';
 import { serializePacket, toWirePacket } from '@core/packet/serializer';
+import { createPacketHeader, PacketTypeId } from '@core/packet/header';
+import { encodeHandshake } from '@core/packet/handshakeCodec';
+import { encodeManifest } from '@core/packet/manifestCodec';
+import { NIL_UUID } from '@domain/ids';
 import type { SessionManager } from '@core/session/sessionManager';
 import { AppError, ErrorCode } from '@core/errors';
 
@@ -216,12 +220,45 @@ export function createTransferService(options: TransferServiceOptions): Transfer
         }
       }
 
+      // §7.5 and §7.6: the handshake announcement and the manifest precede the
+      // data packets, so a receiver that starts scanning at any point learns
+      // what is being sent before it is sent. §11.11's looping is what makes
+      // "at any point" work — the sequence repeats, so a late receiver catches
+      // the opening frames on the next pass.
+      //
+      // Both are prepended rather than appended: a receiver cannot use a data
+      // packet until it has the manifest that describes it.
+      const preamble: Uint8Array[] = [
+        framePacket(PacketTypeId.Handshake, encodeHandshake(protocolVersion)),
+        framePacket(PacketTypeId.Manifest, encodeManifest(manifest)),
+      ];
+
+      const allPackets = [...preamble, ...serialized];
+
       // One frame per packet (QR_SPEC §5), in packet order (§8).
-      const frames = lazyFrameSource(serialized.length, (index) =>
-        encoder.encode(serialized[index] as Uint8Array, {
+      const frames = lazyFrameSource(allPackets.length, (index) =>
+        encoder.encode(allPackets[index] as Uint8Array, {
           ...(prepareOptions.level === undefined ? {} : { level: prepareOptions.level }),
         }),
       );
+
+      /** Wraps a protocol payload in a header and footer, ready to encode. */
+      function framePacket(packetType: PacketTypeId, payload: Uint8Array): Uint8Array {
+        return serializePacket(
+          createPacketHeader({
+            protocolVersion,
+            packetType,
+            sessionId,
+            // §10.1: a manifest describes the transfer, not one file, so it
+            // carries the no-file sentinel (A3-03).
+            fileId: NIL_UUID,
+            packetIndex: 0,
+            totalPackets: 1,
+            payloadLength: payload.byteLength,
+          }),
+          payload,
+        );
+      }
 
       return {
         sessionId,

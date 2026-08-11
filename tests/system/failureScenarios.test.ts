@@ -97,7 +97,8 @@ describe('corrupted packets (§11)', () => {
     harness.graph.send.addFiles([corpusFile('pixel.png')]);
     harness.graph.send.prepare();
 
-    const frame = harness.graph.send.prepared()!.frames.at(0)!;
+    // Index 2: the first data frame, after the handshake and manifest preamble.
+    const frame = harness.graph.send.prepared()!.frames.at(2)!;
     const decoder = createQrDecoder();
 
     expect(decoder.decode(captureOf(frame)).ok).toBe(true);
@@ -112,7 +113,8 @@ describe('corrupted packets (§11)', () => {
     harness.graph.send.addFiles([corpusFile('pixel.png')]);
     harness.graph.send.prepare();
 
-    const frame = harness.graph.send.prepared()!.frames.at(0)!;
+    // Index 2: the first data frame, after the handshake and manifest preamble.
+    const frame = harness.graph.send.prepared()!.frames.at(2)!;
     const decoded = createQrDecoder().decode(scuff(captureOf(frame)));
 
     expect(decoded.ok).toBe(true);
@@ -165,7 +167,8 @@ describe('camera interruption (§11)', () => {
     const prepared = harness.graph.send.prepared()!;
     await harness.graph.receive.start(prepared.sessionId);
 
-    for (const frame of [...prepared.frames].slice(0, 3)) {
+    // Skip the two preamble frames; count only data packets collected.
+    for (const frame of [...prepared.frames].slice(2, 5)) {
       harness.camera.push(captureOf(frame));
     }
     harness.camera.emitAll();
@@ -176,7 +179,7 @@ describe('camera interruption (§11)', () => {
     // The camera is taken away mid-transfer.
     await harness.graph.receive.stop();
 
-    for (const frame of [...prepared.frames].slice(3)) {
+    for (const frame of [...prepared.frames].slice(5)) {
       harness.camera.push(captureOf(frame));
     }
     harness.camera.emitAll();
@@ -370,7 +373,8 @@ describe('session mismatch (§11)', () => {
     harness.graph.send.addFiles([corpusFile('pixel.png')]);
     harness.graph.send.prepare();
 
-    const frame = harness.graph.send.prepared()!.frames.at(0)!;
+    // Index 2: the first data frame, after the handshake and manifest preamble.
+    const frame = harness.graph.send.prepared()!.frames.at(2)!;
     const decoded = createQrDecoder().decode(captureOf(frame));
 
     expect(decoded.ok).toBe(true);

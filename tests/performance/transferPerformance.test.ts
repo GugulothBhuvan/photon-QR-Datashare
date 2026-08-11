@@ -71,9 +71,10 @@ describe('transfer speed (§7)', () => {
     const expectedPackets = Math.ceil(file.content.byteLength / packetSize);
 
     expect(prepared.totalPackets).toBe(expectedPackets);
-    // QR_SPEC §5: one frame per packet. Anything else is either wasted frames
-    // or packets that never travel.
-    expect(prepared.frames.count).toBe(expectedPackets);
+    // QR_SPEC §5: one frame per packet, plus the two-frame preamble §7.5 and
+    // §7.6 require — a handshake announcement and the manifest, which a
+    // receiver needs before any data packet means anything.
+    expect(prepared.frames.count).toBe(expectedPackets + 2);
   });
 
   it('carries a stable number of payload bytes per frame', async () => {
@@ -87,7 +88,8 @@ describe('transfer speed (§7)', () => {
     harness.graph.send.prepare();
 
     const prepared = harness.graph.send.prepared()!;
-    const bytesPerFrame = file.content.byteLength / prepared.frames.count;
+    // Data frames only: the preamble carries no file payload.
+    const bytesPerFrame = file.content.byteLength / (prepared.frames.count - 2);
 
     // Every frame but the last carries a full packet, so the average is within
     // one packet of the configured size.

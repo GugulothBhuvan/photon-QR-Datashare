@@ -448,7 +448,7 @@ describe('confidentiality (§19)', () => {
     harness.graph.send.prepare();
 
     const prepared = harness.graph.send.prepared()!;
-    const decoded = createQrDecoder().decode(captureOf(prepared.frames.at(0)!));
+    const decoded = createQrDecoder().decode(captureOf(prepared.frames.at(2)!));
 
     expect(decoded.ok).toBe(true);
     if (!decoded.ok) {

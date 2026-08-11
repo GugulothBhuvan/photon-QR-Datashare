@@ -98,6 +98,20 @@ export interface SessionManager {
   /** Creates a session in the `Created` state (§8.4, §7.4). */
   createSession(options?: CreateSessionOptions): Session;
 
+  /**
+   * Adopts a session a **peer** created, using the id it chose.
+   *
+   * §7.5's successful output is a *shared* session id, and §8.11 makes a
+   * session the thing a packet is accepted against — so a receiver must hold
+   * the sender's id, not one of its own. `createSession` generates an id and is
+   * therefore the sender's entry point; this is the receiver's.
+   *
+   * Returns the existing session if one is already held, because §11.11's
+   * looping means the same manifest arrives repeatedly and re-adopting must not
+   * discard packets already collected.
+   */
+  adoptSession(id: SessionId, peerProtocolVersion: number): Session;
+
   /** The session with this id, or `undefined`. */
   getSession(id: SessionId): Session | undefined;
 
@@ -173,6 +187,30 @@ export function createSessionManager(options: SessionManagerOptions): SessionMan
   const registry = options.registry ?? createSessionRegistry();
 
   return {
+    adoptSession(id, peerProtocolVersion) {
+      const existing = registry.getSession(id);
+
+      // §11.11: the sender loops, so this arrives many times per transfer.
+      // Replacing the session would discard everything collected so far.
+      if (existing !== undefined) {
+        return existing;
+      }
+
+      const timestamp = clock.now();
+      const session = createSession({
+        id,
+        // The peer's version, not this build's. §10.7.2 has the receiver
+        // validate what arrived rather than assume its own.
+        protocolVersion: peerProtocolVersion as never,
+        createdAt: timestamp,
+        state: SessionState.Created,
+      });
+
+      registry.record(session, timestamp);
+
+      return session;
+    },
+
     createSession(createOptions = {}) {
       const raw = idGenerator.next();
       // Fails loudly rather than producing a session that cannot be

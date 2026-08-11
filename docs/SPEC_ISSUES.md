@@ -536,6 +536,99 @@ updated to name the library actually used.
 
 ---
 
+## SI-014 — The handshake requires a return path the optical transport does not have
+
+| | |
+| --- | --- |
+| **Document** | `PROTOCOL_SPEC.md`, with `PACKET_SPEC.md` |
+| **Section** | §7.5 Phase 3 — Handshake, with PACKET_SPEC §9.1 and the packet registry |
+| **Status** | `Open` — blocking a specification-conformant handshake |
+
+**Description.** §7.5 makes the handshake a **negotiation**, not an
+announcement. It requires:
+
+- session discovery,
+- protocol version negotiation,
+- capability negotiation,
+- **receiver validation**,
+
+and states that "the handshake SHALL complete successfully before any protocol
+metadata or file packets are transmitted", producing "agreed" capabilities and
+an "agreed" protocol version.
+
+Agreement requires both parties to speak. The packet registry reserves
+`HandshakeResponse` (`0x02`) alongside `Handshake` (`0x01`), which confirms the
+specification intends a reply.
+
+**Photon's transport is one way.** The sender displays QR codes; the receiver
+holds a camera. There is no return path, and no section defines one. This is
+the same missing capability SI-010 records for adaptive transport, reaching a
+different requirement.
+
+**Impact.** A conformant handshake cannot be performed. Nothing can be
+*negotiated* or *agreed*, and the receiver cannot be *validated*, because the
+sender never hears from it.
+
+What is achievable is a one-way **announcement**: the sender transmits its
+version and capability bitmap (PACKET_SPEC §9.1 defines that payload
+completely), the receiver reads them and decides unilaterally whether it can
+proceed. That delivers the useful outcome — a shared session id, a known
+version, known capabilities — without inventing a return channel.
+
+**Suggested resolution.** Either define the return path — the natural form is
+the receiver displaying its own QR code, which would also resolve SI-010 and
+serve §15's retransmission requests — or restate §7.5 for one-way transports,
+distinguishing a negotiated handshake from an announced one and saying which
+OSP/1.0 requires over an optical link.
+
+---
+
+## SI-015 — The manifest has no wire format, so no transfer can cross a device boundary
+
+| | |
+| --- | --- |
+| **Document** | `PACKET_SPEC.md`, with `PROTOCOL_SPEC.md` |
+| **Section** | §9.2 Manifest, with PROTOCOL_SPEC §10.5 |
+| **Status** | `Open` — **blocking any real transfer** |
+
+**Description.** An escalation of assumption A5-01, which has been open since
+Milestone A and is now the single thing preventing the product from working.
+
+PACKET_SPEC §9.2 defines the manifest packet payload as:
+
+| Field | Type |
+| --- | --- |
+| File Count | UInt16 |
+| Metadata | **Variable** |
+
+and then defers: "Manifest format is defined in `PROTOCOL_SPEC.md`."
+
+PROTOCOL_SPEC §10.5 lists what a manifest *contains* — filename, MIME type,
+file size, compression method, encryption method, packet count, file hash — but
+gives **no byte layout for any of it**. There is no field order, no string
+encoding, no length-prefix convention, no alignment rule, and no statement of
+how a variable number of files is delimited.
+
+**Impact.** The receiver cannot learn what is being sent. Today it reads the
+manifest from a shared object in the same process, which works in a test and is
+meaningless between two phones. Every other part of the pipeline is finished:
+packets serialize, travel optically, validate and reassemble correctly. **The
+transfer fails at the introduction.**
+
+Because §9.2's contents are fully enumerated but its encoding is absent, any
+implementation must invent one, and two independent implementations would not
+interoperate.
+
+**Suggested resolution.** Complete §9.2 with a field-by-field layout, in the
+style §5 already uses for the packet header — that section is unambiguous and
+should be the model.
+
+Until then an implementation has two options, and neither is silent: stop, or
+define a documented encoding of its own, versioned so a future specification can
+supersede it, and state plainly that it interoperates only with itself.
+
+---
+
 # 4. Index By Document
 
 | Document | Issues |
@@ -546,6 +639,7 @@ updated to name the library actually used.
 | `TRD.md` | SI-010 (jointly with PROTOCOL_SPEC), SI-011 (jointly with IMPLEMENTATION_PLAN), SI-013 (jointly with QR_SPEC) |
 | `SECURITY.md` | SI-012 (jointly with PROTOCOL_SPEC) |
 | `QR_SPEC.md` | SI-013 (jointly with TRD) |
+| `PACKET_SPEC.md` | SI-014 (jointly with PROTOCOL_SPEC), SI-015 (jointly with PROTOCOL_SPEC) |
 | `planning/IMPLEMENTATION_PLAN.md` | SI-011 |
 
 # 5. Index By Status

@@ -44,6 +44,7 @@ import { protocolVersion as toProtocolVersion } from '@domain/ids';
 
 import type { ValueRepository } from '@repositories/repository';
 
+import { createDiscoveryService } from '@services/discoveryService';
 import { createReceiveService } from '@services/receiveService';
 import { createTransferService } from '@services/transferService';
 
@@ -112,6 +113,13 @@ export interface AppGraph {
   readonly settings: ReturnType<typeof createSettingsController>;
   /** Exposed so a receive screen can start the camera it was given. */
   readonly camera: CameraAdapter;
+  /**
+   * Watches for a sender and reports the session it announces (§7.4–§7.6).
+   *
+   * This is what lets a receiver begin without being told a session id it has
+   * no way of knowing.
+   */
+  readonly discovery: ReturnType<typeof createDiscoveryService>;
   /**
    * The live camera preview, when the platform has one.
    *
@@ -219,6 +227,17 @@ export function createAppGraph(options: AppCompositionOptions = {}): AppGraph {
     protocolVersion: PROTOCOL_VERSION,
   });
 
+  // §7.4–§7.6: a receiver learns the session from a scanned frame rather than
+  // from a caller. Exposed on the graph so the receive screen can listen for a
+  // sender instead of being handed a session id it could not know.
+  const discovery = createDiscoveryService({
+    camera,
+    decoder: createQrDecoder(),
+    sessions,
+    manifests,
+    supportedVersions: [PROTOCOL_VERSION],
+  });
+
   const receives = createReceiveService({
     camera,
     cipher,
@@ -237,6 +256,7 @@ export function createAppGraph(options: AppCompositionOptions = {}): AppGraph {
       toUserMessage,
     }),
     receive: createReceiveController({ camera, receives, toUserMessage }),
+    discovery,
     settings: createSettingsController({
       repository: options.settingsRepository ?? createMemorySettingsRepository(),
       defaults: defaultAppConfig,
