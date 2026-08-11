@@ -81,6 +81,49 @@ export function ReceiveScreen({
   const cameraError = useStore(cameraErrors ?? NO_CAMERA_ERRORS);
   const { colors } = useTheme();
 
+  /**
+   * What the receiver is doing, rendered in **every** state.
+   *
+   * Four device sessions were spent on a receiver that reported nothing, and
+   * the reason turned out to be structural rather than protocol: the counters
+   * lived below a camera preview on a screen that does not scroll, and every
+   * error state returned early before reaching them. A user could be stuck on
+   * the permission gate, or looking at a dead camera, and the screen looked
+   * the same either way.
+   *
+   * This is the first thing on the screen in every branch, so there is no
+   * state in which the receiver is silent about what it is doing.
+   */
+  const status = (
+    <Card>
+      <Text variant="label">{`Stage: ${state.stage}`}</Text>
+      <Text variant="caption" tone="muted">
+        {`Camera permission: ${state.permission}`}
+      </Text>
+      <Text variant="caption" tone="muted">
+        {CameraPreview === undefined ? 'Camera: unavailable' : 'Camera: device'}
+      </Text>
+      <Text variant="caption" tone="muted">
+        {`Frames seen: ${String(state.framesSeen)} · decoded: ${String(state.framesDecoded)}`}
+      </Text>
+      {state.errorMessage === undefined ? null : (
+        <Text variant="caption" tone="danger">
+          {state.errorMessage}
+        </Text>
+      )}
+      {state.refusalReason === undefined ? null : (
+        <Text variant="caption" tone="danger">
+          {state.refusalReason}
+        </Text>
+      )}
+      {cameraError === undefined ? null : (
+        <Text variant="caption" tone="danger">
+          {`Camera error: ${cameraError}`}
+        </Text>
+      )}
+    </Card>
+  );
+
   // §7.4: a receiver watches for a sender rather than being told about one.
   // Started once permission exists and nothing is running yet — a receive
   // screen that required a button would be asking the user to do the one thing
@@ -100,6 +143,7 @@ export function ReceiveScreen({
   if (CameraPreview === undefined && cameraUnavailableReason !== undefined) {
     return (
       <Screen title="Receive">
+        {status}
         <ErrorState
           title="Camera unavailable on this device"
           description={`The camera could not be started: ${cameraUnavailableReason}`}
@@ -116,9 +160,14 @@ export function ReceiveScreen({
   if (state.stage === ReceiveStage.NeedsPermission) {
     return (
       <Screen title="Receive">
+        {status}
         <ErrorState
           title="Camera access required"
-          description="Allow camera permission to receive files."
+          description={
+            state.permissionRefused
+              ? 'Permission was refused. Android will not ask again - turn the camera on for photon in the system settings.'
+              : 'Allow camera permission to receive files.'
+          }
           actionLabel="Grant permission"
           onAction={() => {
             void receive.requestPermission();
@@ -133,6 +182,7 @@ export function ReceiveScreen({
     // §16: a loading indicator for camera initialization.
     return (
       <Screen title="Receive">
+        {status}
         <LoadingState message="Starting camera…" />
       </Screen>
     );
@@ -141,6 +191,7 @@ export function ReceiveScreen({
   if (state.stage === ReceiveStage.Failed) {
     return (
       <Screen title="Receive">
+        {status}
         <ErrorState
           title="Camera unavailable"
           description={state.errorMessage ?? 'The camera could not be started.'}
@@ -154,7 +205,8 @@ export function ReceiveScreen({
   const ratio = state.totalPackets === 0 ? 0 : state.collectedPackets / state.totalPackets;
 
   return (
-    <Screen title="Receive" scrollable={false}>
+    <Screen title="Receive">
+      {status}
       {/* §5.3 camera preview and scan overlay */}
       <View
         style={[styles.preview, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}
@@ -183,7 +235,6 @@ export function ReceiveScreen({
           <Stat label="Collected" value={`${state.collectedPackets} / ${state.totalPackets}`} />
           {/* §5.3 missing packet counter */}
           <Stat label="Missing" value={String(state.missingPackets)} />
-          <Stat label="Frames read" value={`${state.framesDecoded} / ${state.framesSeen}`} />
         </View>
 
         {/* §5.3 transfer status */}
@@ -211,28 +262,6 @@ export function ReceiveScreen({
               : state.framesDecoded === 0
                 ? `Camera working (${String(state.framesSeen)} frames), but no code read yet — try moving closer or further away.`
                 : `Reading codes (${String(state.framesDecoded)} of ${String(state.framesSeen)} frames).`}
-          </Text>
-        )}
-
-        {/*
-          §14: a sender that was read and refused must say so. This used to be
-          recorded by discovery and published nowhere, so an incompatible
-          device left the screen searching forever.
-        */}
-        {state.refusalReason === undefined ? null : (
-          <Text variant="caption" tone="danger">
-            {state.refusalReason}
-          </Text>
-        )}
-
-        {/*
-          §14: a camera that loaded and then failed must say so. Without this
-          the interface showed an empty preview, which looks exactly like a
-          working camera pointed at nothing.
-        */}
-        {cameraError === undefined ? null : (
-          <Text variant="caption" tone="danger">
-            {`Camera error: ${cameraError}`}
           </Text>
         )}
       </Card>

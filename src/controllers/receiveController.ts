@@ -71,6 +71,16 @@ export interface ReceiveState {
    * decided it cannot speak to the device in front of it must say so.
    */
   readonly refusalReason: string | undefined;
+  /**
+   * Whether the user refused the camera and Android will not ask again.
+   *
+   * Derived here rather than compared in the screen: camera vocabulary belongs
+   * to the adapter, and a screen importing `CameraPermission` would cross the
+   * layer boundary to learn something the controller already knows. The
+   * difference matters — a refused permission makes the Grant button do
+   * nothing, and the user must be sent to system settings instead.
+   */
+  readonly permissionRefused: boolean;
   readonly errorMessage: string | undefined;
 }
 
@@ -84,6 +94,7 @@ export const initialReceiveState: ReceiveState = Object.freeze({
   framesSeen: 0,
   framesDecoded: 0,
   refusalReason: undefined,
+  permissionRefused: false,
   errorMessage: undefined,
 });
 
@@ -179,6 +190,7 @@ export function createReceiveController(options: ReceiveControllerOptions): Rece
       state.setState((previous) => ({
         ...previous,
         permission,
+        permissionRefused: permission === CameraPermission.Denied,
         stage:
           permission === CameraPermission.Granted
             ? ReceiveStage.Stopped

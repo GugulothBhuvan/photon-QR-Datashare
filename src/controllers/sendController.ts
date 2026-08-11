@@ -96,11 +96,23 @@ export interface SendState {
 /**
  * Default payload size.
  *
- * Comfortably inside the medium-error-correction QR capacity of 2331 bytes
- * once the 54-byte packet overhead is added, and small enough that a dropped
- * frame costs little to repeat.
+ * Lowered from 512. Fitting inside the QR capacity is the easy constraint; the
+ * one that decides whether a transfer works at all is how many modules a
+ * receiving camera has to resolve. 512 bytes plus the 54-byte header lands
+ * near QR version 20 — around 97 modules across — and a phone camera reading
+ * another phone's screen at arm's length has only a few pixels per module to
+ * work with, before autofocus and hand tremor take their share.
+ *
+ * 256 bytes lands near version 12, about 65 modules, which is roughly half the
+ * density for the same physical code. The cost is more frames for the same
+ * file, which the transport already handles: §11.11 loops, and a frame missed
+ * is a frame repeated.
+ *
+ * Every optical-transfer implementation arrives at this trade, and the ones
+ * with hardware behind them recommend cutting bytes per frame as the *first*
+ * thing to try when nothing decodes.
  */
-export const DEFAULT_PACKET_SIZE = 512;
+export const DEFAULT_PACKET_SIZE = 256;
 
 export const initialSendState: SendState = Object.freeze({
   stage: SendStage.Selecting,

@@ -9,7 +9,7 @@
  * after capability negotiation, and neither is implemented — a toggle that
  * silently did nothing would be worse than one that explains itself.
  */
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, useWindowDimensions, View } from 'react-native';
 
 import {
   Button,
@@ -58,9 +58,21 @@ const SPEEDS: readonly { readonly value: QRSpeedPreference; readonly label: stri
     { value: QRSpeedPreference.Fast, label: 'Fast' },
   ]);
 
-export function SendScreen({ onPickFiles, onBack, frameSize = 280, onCancel }: SendScreenProps) {
+export function SendScreen({ onPickFiles, onBack, frameSize, onCancel }: SendScreenProps) {
   const { send } = useAppServices();
   const state = useStore(send.state);
+  const { width, height } = useWindowDimensions();
+
+  /**
+   * The code fills the screen, less a margin for the quiet zone.
+   *
+   * It was drawn at a fixed 280 points, which on a phone is roughly half the
+   * width — so a receiving camera saw a small code inside a large frame and
+   * had a few pixels per module to work with. A code that fills the sending
+   * screen is the single cheapest thing that makes it readable, and it is the
+   * fix every optical-transfer implementation ends up recommending first.
+   */
+  const displaySize = frameSize ?? Math.floor(Math.min(width, height) * 0.92);
 
   // §8: frames are displayed sequentially. Called before any early return —
   // a hook may not be conditional.
@@ -92,14 +104,14 @@ export function SendScreen({ onPickFiles, onBack, frameSize = 280, onCancel }: S
   const transmitting = state.stage === SendStage.Sending || state.stage === SendStage.Paused;
 
   if (transmitting) {
-    const frame = send.currentFrame(frameSize);
+    const frame = send.currentFrame(displaySize);
     const { position } = state;
 
     return (
       <Screen title={state.stage === SendStage.Paused ? 'Paused' : 'Sending'} scrollable={false}>
         <QrDisplay
           frame={frame}
-          size={frameSize}
+          size={displaySize}
           caption={
             position === undefined
               ? undefined
