@@ -30,7 +30,13 @@ import { fileId as toFileId, type FileId, type SessionId } from '@domain/ids';
 import type { Manifest, ManifestConfiguration } from '@domain/manifest';
 import { SessionState } from '@domain/session';
 
-import { createFrameScheduler, type FrameRate, type FrameScheduler } from '@qr/frameScheduler';
+import {
+  createFrameScheduler,
+  lazyFrameSource,
+  type FrameRate,
+  type FrameScheduler,
+  type FrameSource,
+} from '@qr/frameScheduler';
 import { createQrEncoder, type ErrorCorrectionLevel, type QrFrame } from '@qr/qrEncoder';
 
 /** A file the user chose to send, before the protocol has seen it. */
@@ -46,8 +52,16 @@ export interface SelectedFile {
 export interface PreparedTransfer {
   readonly sessionId: SessionId;
   readonly manifest: Manifest;
-  /** One frame per packet, in transmission order (QR_SPEC §8). */
-  readonly frames: readonly QrFrame[];
+  /**
+   * One frame per packet, in transmission order (QR_SPEC §8).
+   *
+   * A **lazy** sequence: each frame is encoded when first displayed and only
+   * the most recent few are kept. Encoding every frame during `prepare` held
+   * one QR bitmap per packet, so peak memory grew with file size — TRD §34
+   * caps it at 150 MB regardless. Iterating the whole sequence still works and
+   * still produces every frame, in order.
+   */
+  readonly frames: FrameSource<QrFrame>;
   /** Paces the frames. The screen drives it; the service does not. */
   readonly scheduler: FrameScheduler<QrFrame>;
   readonly totalPackets: number;
@@ -159,8 +173,14 @@ export function createTransferService(options: TransferServiceOptions): Transfer
 
       manifests.accept(manifest);
 
-      // One frame per packet (QR_SPEC §5), in packet order (§8).
-      const frames: QrFrame[] = [];
+      // Packetizing is eager: the packets are what the manifest counts, they
+      // are small, and the registry owns them either way. **Encoding** is what
+      // is deferred — a QR bitmap is orders of magnitude larger than the packet
+      // it carries, and only one is on screen at a time.
+      //
+      // The serialized bytes are kept in packet order so a frame can be
+      // produced from its index without re-walking the file.
+      const serialized: Uint8Array[] = [];
 
       for (const entry of described) {
         const produced = packets.packetize({
@@ -176,13 +196,16 @@ export function createTransferService(options: TransferServiceOptions): Transfer
             totalPackets: produced.length,
           });
 
-          frames.push(
-            encoder.encode(serializePacket(wire.header, wire.payload), {
-              ...(prepareOptions.level === undefined ? {} : { level: prepareOptions.level }),
-            }),
-          );
+          serialized.push(serializePacket(wire.header, wire.payload));
         }
       }
+
+      // One frame per packet (QR_SPEC §5), in packet order (§8).
+      const frames = lazyFrameSource(serialized.length, (index) =>
+        encoder.encode(serialized[index] as Uint8Array, {
+          ...(prepareOptions.level === undefined ? {} : { level: prepareOptions.level }),
+        }),
+      );
 
       return {
         sessionId,

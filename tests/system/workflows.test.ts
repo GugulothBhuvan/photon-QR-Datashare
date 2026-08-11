@@ -189,9 +189,9 @@ describe('resume (§6)', () => {
     await harness.graph.receive.start(prepared.sessionId);
 
     // Send the first half, then pause.
-    const half = Math.floor(prepared.frames.length / 2);
+    const half = Math.floor(prepared.frames.count / 2);
 
-    for (const frame of prepared.frames.slice(0, half)) {
+    for (const frame of [...prepared.frames].slice(0, half)) {
       harness.camera.push(captureOf(frame));
     }
     harness.camera.emitAll();
@@ -206,7 +206,7 @@ describe('resume (§6)', () => {
     harness.graph.send.start();
     expect(harness.graph.send.state.getState().stage).toBe(SendStage.Sending);
 
-    for (const frame of prepared.frames.slice(half)) {
+    for (const frame of [...prepared.frames].slice(half)) {
       harness.camera.push(captureOf(frame));
     }
     harness.camera.emitAll();

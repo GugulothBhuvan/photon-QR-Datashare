@@ -232,8 +232,8 @@ describe('Send (UI-003, §5.2)', () => {
     });
 
     const prepared = graph.send.prepared();
-    expect(prepared?.frames.length).toBeGreaterThan(1);
-    expect(prepared?.totalPackets).toBe(prepared?.frames.length);
+    expect(prepared?.frames.count).toBeGreaterThan(1);
+    expect(prepared?.totalPackets).toBe(prepared?.frames.count);
   });
 
   it('renders the frame once transmitting', async () => {

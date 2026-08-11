@@ -203,6 +203,15 @@ screens above them are complete and would otherwise look finished.
 | A12-03 | No history repository. `HistoryScreen` renders entries it is given; nothing persists a completed transfer. | UI_SPEC §5.5 specifies what history *shows*; no read section says what is stored, for how long, or whether history survives reinstalling. Inventing a retention policy would be a product decision made in a repository. | `src/screens/HistoryScreen.tsx`, `app/history.tsx` | A storage phase, against whichever section defines transfer records |
 | A12-04 | The composition root hashes files with a non-cryptographic placeholder, `PHOTON-PLACEHOLDER-32` (FNV-1a). | §20 owns integrity algorithms and is unread. The manifest must name *some* algorithm and the receiver must verify against it, so a placeholder that is honestly named is safer than a real-sounding one: `verifyFile` reports an unsupported algorithm distinctly (A11-04), and nothing can mistake this for SHA-256. | `src/config/appComposition.ts` | Security phase (§20) |
 
+## 3.12 Performance (Phase 10)
+
+| ID | Assumption | Why necessary | Where | Verify in |
+| --- | --- | --- | --- | --- |
+| A13-01 | The lazy frame source retains **four** encoded frames. | No section states how many frames may be held. Four covers the frame on screen, the one before it (a pause and resume revisits it) and a little slack, while keeping peak memory a property of the window rather than the file — which is what TRD §34's 150 MB cap needs of a large transfer. | `src/qr/frameScheduler.ts` | Device measurement against TRD §34 |
+| A13-02 | A **duplicate** frame counts as a successful read when judging link quality. | TRD §25 lists duplicate rate as a signal without saying which way it points. A duplicate means the frame was captured and decoded, and §11.11 looping produces duplicates by design — counting them as failures would make the default recovery strategy look like a broken link and slow every transfer down. | `src/qr/adaptiveMonitor.ts` | Against §25 if it is expanded |
+| A13-03 | `DUPLICATE_HEADROOM_RATIO` is 0.5. | §25 names duplicate rate as a monitored signal but defines no threshold. Exposed as a named constant rather than buried so the number is reviewable. | `src/qr/adaptiveMonitor.ts` | Field measurement |
+| A13-04 | Adaptation produces a **recommendation** shown to the user, not an automatic sender change. | The four §25 signals are receiver-side and the three responses are sender-side, with no return path in OSP/1.0. See SI-010 — the loop cannot be closed without inventing protocol. | `src/qr/adaptiveMonitor.ts` | When a back-channel is specified |
+
 ---
 
 # 4. Assumptions By Verifying Phase
@@ -229,6 +238,8 @@ A phase should check these before building on them.
 | Device integration (camera, file picker) | A12-01, A12-02 |
 | Storage of transfer records | A12-03 |
 | Integrity / Security (§20) — placeholder digest | A12-04 |
+| Device measurement against TRD §34 | A13-01, A13-03 |
+| Adaptive transport (TRD §25) | A13-02, A13-04 |
 | Device camera adapter | A10-01 |
 | Performance (§16, Phase 10) | A10-02, A10-03 |
 | Transport validation (QR_SPEC §18) | A10-05 |

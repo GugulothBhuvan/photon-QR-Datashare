@@ -45,6 +45,15 @@ module.exports = {
     '<rootDir>/src/**/*.test.{ts,tsx}',
     '<rootDir>/app/**/*.test.{ts,tsx}',
   ],
+  /**
+   * Benchmarks are excluded from the default run.
+   *
+   * `tests/performance/*.bench.test.ts` encodes and decodes hundreds of QR
+   * frames to report timings. That is worth running deliberately and not worth
+   * running on every pull request, so `npm run benchmark` overrides this.
+   */
+  testPathIgnorePatterns: ['/node_modules/', '\\.bench\\.test\\.tsx?$'],
+
   collectCoverageFrom: ['src/**/*.{ts,tsx}', '!src/**/index.ts', '!src/**/*.d.ts'],
   coverageDirectory: '<rootDir>/coverage',
   clearMocks: true,

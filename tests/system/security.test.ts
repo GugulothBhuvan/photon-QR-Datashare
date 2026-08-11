@@ -332,7 +332,7 @@ describe('replay protection (§8)', () => {
     const state = victim.graph.receive.state.getState();
 
     // Every replayed frame was seen and decoded, and not one was accepted.
-    expect(state.framesSeen).toBe(theirs.frames.length);
+    expect(state.framesSeen).toBe(theirs.frames.count);
     expect(state.collectedPackets).toBe(0);
     expect(victim.graph.receive.finish()).toHaveLength(0);
   });
@@ -344,7 +344,7 @@ describe('replay protection (§8)', () => {
     harness.graph.send.addFiles([{ name: 'a.bin', content: Uint8Array.from([1, 2, 3, 4]) }]);
     harness.graph.send.prepare();
 
-    const frame = harness.graph.send.prepared()!.frames[0]!;
+    const frame = harness.graph.send.prepared()!.frames.at(0)!;
     const decoded = createQrDecoder().decode(captureOf(frame));
 
     expect(decoded.ok).toBe(true);

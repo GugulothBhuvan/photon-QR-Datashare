@@ -299,6 +299,77 @@ protocol version. §24.8 Reserved Fields is the natural place for the second.
 
 ---
 
+## SI-010 — Adaptive transport requires receiver signals the protocol gives no way to send
+
+| | |
+| --- | --- |
+| **Document** | `TRD.md`, with `PROTOCOL_SPEC.md` |
+| **Section** | TRD §25 Adaptive Transport, with QR_SPEC §10 |
+| **Status** | `Open` |
+
+**Description.** TRD §25 requires adaptive mode to monitor scan success, blur,
+decode latency and duplicate rate, and permits it to reduce FPS, enlarge the
+code or increase redundancy. Every one of those four signals is observable only
+at the **receiver**, while all three responses are actions only the **sender**
+can take. No read section defines a return path: the optical link is one way,
+and OSP/1.0 defines no back-channel, no acknowledgement packet and no
+out-of-band signal.
+
+**Impact.** Adaptation cannot close its loop. A receiver can measure that it is
+missing frames and can compute exactly what the sender should do, and has no way
+to say so. Implemented as far as it can be — `src/qr/adaptiveMonitor.ts`
+accumulates the four signals and produces a recommendation — but the
+recommendation is delivered to the *user*, who must change the sender's speed by
+hand. That satisfies the letter of §25's "MAY reduce FPS" only because a person
+is standing in for the missing protocol.
+
+**Suggested resolution.** Either define the return path — the natural form is
+the receiver displaying its own QR code carrying a small feedback packet, which
+also solves the retransmission request §15 gestures at — or restate §25 as
+guidance for a future version and say plainly that OSP/1.0 adaptation is
+manual. The second is the smaller change and would let an implementation stop
+pretending the loop closes.
+
+---
+
+## SI-011 — "Worker Threads" is a planned deliverable with no technology and no specification
+
+| | |
+| --- | --- |
+| **Document** | `planning/IMPLEMENTATION_PLAN.md`, with `TRD.md` |
+| **Section** | P10 Performance deliverables, with TRD §3 Technology Stack |
+| **Status** | `Open` |
+
+**Description.** `IMPLEMENTATION_PLAN.md` P10 lists "Worker Threads" as a
+deliverable. TRD §3 enumerates the technology stack — framework, state, camera,
+QR, storage, crypto, compression, testing — and names nothing that provides
+them. No section of any specification describes what should run on a worker,
+what the boundary would carry, or how it interacts with the single-threaded
+protocol engine.
+
+**Impact.** The deliverable cannot be implemented as written without choosing a
+dependency the stack does not list, which AGENTS.md §7 places outside an
+implementer's authority. React Native's JavaScript runtime is single-threaded;
+true worker threads need a native module (`react-native-worklets-core`, or a
+JSI-based equivalent), which is a dependency review and an architecture
+decision, not a performance tweak.
+
+**Deliberately not implemented.** The underlying goal — that a large transfer
+does not block the interface — has been met differently and honestly: frame
+encoding is now lazy (`lazyFrameSource`), so the expensive work happens one
+frame at a time between displays rather than in a single blocking pass during
+preparation. Measured on the benchmark, preparation is now 6–18 ms regardless
+of file size. No worker was introduced and none is pretended.
+
+**Suggested resolution.** Either add a concurrency technology to TRD §3 and a
+section describing what belongs on a worker, or remove the deliverable from P10
+and record that off-main-thread execution is deferred. If it is kept, note that
+the pipeline's cost is dominated by *decoding* — roughly 90% of end-to-end time
+in the benchmark — so a worker that only offloaded encoding would move very
+little.
+
+---
+
 # 4. Index By Document
 
 | Document | Issues |
@@ -306,13 +377,15 @@ protocol version. §24.8 Reserved Fields is the natural place for the second.
 | `PROTOCOL_SPEC.md` | SI-001, SI-002, SI-004, SI-005, SI-006, SI-007, SI-009 |
 | `STATE_MACHINES.md` | SI-003 |
 | `PACKET_SPEC.md` | SI-008 (jointly with PROTOCOL_SPEC) |
+| `TRD.md` | SI-010 (jointly with PROTOCOL_SPEC), SI-011 (jointly with IMPLEMENTATION_PLAN) |
+| `planning/IMPLEMENTATION_PLAN.md` | SI-011 |
 
 # 5. Index By Status
 
 | Status | Issues |
 | --- | --- |
 | `Working` | SI-001, SI-002, SI-005 |
-| `Open` | SI-003, SI-004, SI-006, SI-007, SI-009 |
+| `Open` | SI-003, SI-004, SI-006, SI-007, SI-009, SI-010, SI-011 |
 | `Open` — **blocking** | **SI-008** |
 | `Resolved` | — |
 | `Withdrawn` | — |

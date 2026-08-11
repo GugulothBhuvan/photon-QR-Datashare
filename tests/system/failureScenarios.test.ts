@@ -97,7 +97,7 @@ describe('corrupted packets (§11)', () => {
     harness.graph.send.addFiles([corpusFile('pixel.png')]);
     harness.graph.send.prepare();
 
-    const frame = harness.graph.send.prepared()!.frames[0]!;
+    const frame = harness.graph.send.prepared()!.frames.at(0)!;
     const decoder = createQrDecoder();
 
     expect(decoder.decode(captureOf(frame)).ok).toBe(true);
@@ -112,7 +112,7 @@ describe('corrupted packets (§11)', () => {
     harness.graph.send.addFiles([corpusFile('pixel.png')]);
     harness.graph.send.prepare();
 
-    const frame = harness.graph.send.prepared()!.frames[0]!;
+    const frame = harness.graph.send.prepared()!.frames.at(0)!;
     const decoded = createQrDecoder().decode(scuff(captureOf(frame)));
 
     expect(decoded.ok).toBe(true);
@@ -165,7 +165,7 @@ describe('camera interruption (§11)', () => {
     const prepared = harness.graph.send.prepared()!;
     await harness.graph.receive.start(prepared.sessionId);
 
-    for (const frame of prepared.frames.slice(0, 3)) {
+    for (const frame of [...prepared.frames].slice(0, 3)) {
       harness.camera.push(captureOf(frame));
     }
     harness.camera.emitAll();
@@ -176,7 +176,7 @@ describe('camera interruption (§11)', () => {
     // The camera is taken away mid-transfer.
     await harness.graph.receive.stop();
 
-    for (const frame of prepared.frames.slice(3)) {
+    for (const frame of [...prepared.frames].slice(3)) {
       harness.camera.push(captureOf(frame));
     }
     harness.camera.emitAll();
@@ -219,7 +219,7 @@ describe('low-light scanning (§11)', () => {
     harness.graph.send.addFiles([corpusFile('pixel.png')]);
     harness.graph.send.prepare();
 
-    const lit = captureOf(harness.graph.send.prepared()!.frames[0]!);
+    const lit = captureOf(harness.graph.send.prepared()!.frames.at(0)!);
     const dark = dimmed(lit, 0.02);
 
     expect(isPlausiblyDecodable(lit)).toBe(true);
@@ -261,7 +261,7 @@ describe('low-light scanning (§11)', () => {
     harness.graph.send.addFiles([corpusFile('pixel.png')]);
     harness.graph.send.prepare();
 
-    const lit = captureOf(harness.graph.send.prepared()!.frames[0]!);
+    const lit = captureOf(harness.graph.send.prepared()!.frames.at(0)!);
     const decoder = createQrDecoder();
 
     // Dimmed to just above the threshold, a frame still decodes.
@@ -370,7 +370,7 @@ describe('session mismatch (§11)', () => {
     harness.graph.send.addFiles([corpusFile('pixel.png')]);
     harness.graph.send.prepare();
 
-    const frame = harness.graph.send.prepared()!.frames[0]!;
+    const frame = harness.graph.send.prepared()!.frames.at(0)!;
     const decoded = createQrDecoder().decode(captureOf(frame));
 
     expect(decoded.ok).toBe(true);

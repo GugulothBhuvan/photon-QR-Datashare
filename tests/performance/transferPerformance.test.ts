@@ -73,7 +73,7 @@ describe('transfer speed (§7)', () => {
     expect(prepared.totalPackets).toBe(expectedPackets);
     // QR_SPEC §5: one frame per packet. Anything else is either wasted frames
     // or packets that never travel.
-    expect(prepared.frames).toHaveLength(expectedPackets);
+    expect(prepared.frames.count).toBe(expectedPackets);
   });
 
   it('carries a stable number of payload bytes per frame', async () => {
@@ -87,11 +87,11 @@ describe('transfer speed (§7)', () => {
     harness.graph.send.prepare();
 
     const prepared = harness.graph.send.prepared()!;
-    const bytesPerFrame = file.content.byteLength / prepared.frames.length;
+    const bytesPerFrame = file.content.byteLength / prepared.frames.count;
 
     // Every frame but the last carries a full packet, so the average is within
     // one packet of the configured size.
-    expect(bytesPerFrame).toBeGreaterThan(packetSize - packetSize / prepared.frames.length - 1);
+    expect(bytesPerFrame).toBeGreaterThan(packetSize - packetSize / prepared.frames.count - 1);
     expect(bytesPerFrame).toBeLessThanOrEqual(packetSize);
   });
 
@@ -132,10 +132,10 @@ describe('decode rate (§7)', () => {
     const decoder = createQrDecoder();
 
     const { result: decoded, ms } = timed(
-      () => prepared.frames.filter((frame) => decoder.decode(captureOf(frame)).ok).length,
+      () => [...prepared.frames].filter((frame) => decoder.decode(captureOf(frame)).ok).length,
     );
 
-    expect(decoded).toBe(prepared.frames.length);
+    expect(decoded).toBe(prepared.frames.count);
 
     // Reported, not asserted: the number is for the reader of CI output.
     console.log(
@@ -150,7 +150,7 @@ describe('decode rate (§7)', () => {
     harness.graph.send.addFiles([{ name: 'a.bin', content: largeFile(2048).content }]);
     harness.graph.send.prepare();
 
-    const frame = captureOf(harness.graph.send.prepared()!.frames[0]!);
+    const frame = captureOf(harness.graph.send.prepared()!.frames.at(0)!);
     const dark = { ...frame, data: new Uint8ClampedArray(frame.data.length) };
     const decoder = createQrDecoder();
 

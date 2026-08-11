@@ -253,7 +253,7 @@ export function createHarness(options: HarnessOptions = {}): Harness {
       return {
         sessionId: prepared.sessionId,
         files: received,
-        frameCount: prepared.frames.length,
+        frameCount: prepared.frames.count,
         framesDelivered,
         totalPackets: state.totalPackets,
         collectedPackets: state.collectedPackets,
