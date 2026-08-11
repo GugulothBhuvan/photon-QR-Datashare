@@ -11,6 +11,7 @@
  * Under Node and on the web there is no camera, and the placeholder says so
  * rather than pretending to be one.
  */
+import { useEffect } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import {
@@ -36,6 +37,16 @@ export function ReceiveScreen({ onBack, onComplete }: ReceiveScreenProps) {
   const { receive, cameraPreview: CameraPreview, cameraUnavailableReason } = useAppServices();
   const state = useStore(receive.state);
   const { colors } = useTheme();
+
+  // §7.4: a receiver watches for a sender rather than being told about one.
+  // Started once permission exists and nothing is running yet — a receive
+  // screen that required a button would be asking the user to do the one thing
+  // they cannot know how to do.
+  useEffect(() => {
+    if (state.stage === ReceiveStage.Stopped) {
+      void receive.listen();
+    }
+  }, [receive, state.stage]);
 
   // §14: a clear title, an explanation, and a recovery action.
   //
@@ -137,8 +148,10 @@ export function ReceiveScreen({ onBack, onComplete }: ReceiveScreenProps) {
           {state.stage === ReceiveStage.Complete
             ? 'All packets received'
             : state.stage === ReceiveStage.Scanning
-              ? 'Scanning…'
-              : 'Stopped'}
+              ? 'Receiving…'
+              : state.stage === ReceiveStage.Searching
+                ? 'Looking for a sender…'
+                : 'Stopped'}
         </Text>
       </Card>
 

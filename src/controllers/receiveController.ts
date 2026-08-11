@@ -11,6 +11,7 @@
 import type { CameraAdapter } from '@camera/cameraPort';
 import { CameraPermission } from '@camera/cameraPort';
 
+import type { DiscoveryListener, DiscoveryService } from '@services/discoveryService';
 import type {
   CompletedFile,
   ReceiveProgress,
@@ -27,6 +28,15 @@ export const ReceiveStage = {
   NeedsPermission: 'NEEDS_PERMISSION',
   /** Camera starting (§16 loading state). */
   Starting: 'STARTING',
+  /**
+   * Camera running, waiting for a sender to appear (§7.4).
+   *
+   * Distinct from Scanning: nothing is being collected yet because no manifest
+   * has arrived. A receiver spends most of its time here, and telling the user
+   * "searching" rather than "scanning" is the difference between a screen that
+   * looks broken and one that looks patient.
+   */
+  Searching: 'SEARCHING',
   /** Capturing frames. */
   Scanning: 'SCANNING',
   /** Every declared packet collected (§13.11). */
@@ -71,6 +81,15 @@ export interface ReceiveController {
   requestPermission(): Promise<CameraPermission>;
   /** Starts the camera and begins consuming frames for a session. */
   start(sessionId: SessionId): Promise<void>;
+
+  /**
+   * Starts the camera and waits for a sender to announce itself (§7.4–§7.6).
+   *
+   * This is what a receiver actually does on a device: it knows no session id,
+   * because the sender chose it. `start` remains for callers that already have
+   * one — chiefly tests, which construct both sides.
+   */
+  listen(): Promise<void>;
   /** Stops capture and releases the camera. */
   stop(): Promise<void>;
   /** Reassembles and verifies every complete file (§3.24). */
@@ -80,14 +99,17 @@ export interface ReceiveController {
 export interface ReceiveControllerOptions {
   readonly camera: CameraAdapter;
   readonly receives: ReceiveService;
+  /** Watches for a sender. Absent only in tests that supply a session id. */
+  readonly discovery?: DiscoveryService;
   readonly toUserMessage: (error: unknown) => string;
 }
 
 export function createReceiveController(options: ReceiveControllerOptions): ReceiveController {
-  const { camera, receives, toUserMessage } = options;
+  const { camera, receives, discovery, toUserMessage } = options;
   const state = createStore(initialReceiveState);
 
   let session: ReceiveSession | undefined;
+  let listener: DiscoveryListener | undefined;
 
   function applyProgress(progress: ReceiveProgress): void {
     state.setState((previous) => ({
@@ -142,7 +164,52 @@ export function createReceiveController(options: ReceiveControllerOptions): Rece
       }
     },
 
+    async listen() {
+      if (discovery === undefined) {
+        state.setState((previous) => ({
+          ...previous,
+          stage: ReceiveStage.Failed,
+          errorMessage: 'This build cannot search for a sender.',
+        }));
+        return;
+      }
+
+      state.setState((previous) => ({
+        ...previous,
+        stage: ReceiveStage.Starting,
+        errorMessage: undefined,
+      }));
+
+      try {
+        await camera.start();
+
+        // Collection begins only once a manifest has been accepted — until
+        // then there is nothing to place packets against (§10.14).
+        listener = discovery.listen((sessionId) => {
+          session = receives.start(sessionId, applyProgress);
+
+          state.setState((previous) => ({
+            ...previous,
+            stage: ReceiveStage.Scanning,
+            sessionId,
+          }));
+
+          applyProgress(session.progress());
+        });
+
+        state.setState((previous) => ({ ...previous, stage: ReceiveStage.Searching }));
+      } catch (error: unknown) {
+        state.setState((previous) => ({
+          ...previous,
+          stage: ReceiveStage.Failed,
+          errorMessage: toUserMessage(error),
+        }));
+      }
+    },
+
     async stop() {
+      listener?.stop();
+      listener = undefined;
       session?.stop();
       session = undefined;
       await camera.stop();

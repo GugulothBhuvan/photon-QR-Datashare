@@ -255,7 +255,7 @@ export function createAppGraph(options: AppCompositionOptions = {}): AppGraph {
       hashFile: (content) => bytesToHex(verifier.digest(content)),
       toUserMessage,
     }),
-    receive: createReceiveController({ camera, receives, toUserMessage }),
+    receive: createReceiveController({ camera, receives, discovery, toUserMessage }),
     discovery,
     settings: createSettingsController({
       repository: options.settingsRepository ?? createMemorySettingsRepository(),
