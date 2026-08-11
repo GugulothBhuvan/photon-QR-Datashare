@@ -36,14 +36,27 @@ export function Screen({
   const header =
     title === undefined ? null : (
       <View style={styles.header}>
-        <Text variant="display" accessibilityRole="header">
-          {title}
-        </Text>
+        <View style={styles.titleRow}>
+          {/*
+            A prompt marker. Hidden from assistive technology: it tells the eye
+            where a screen begins in a layout with no cards to do that job, and
+            a screen reader announcing "black rectangle photon" would be strictly
+            worse than announcing nothing.
+          */}
+          <Text variant="title" importantForAccessibility="no" accessibilityElementsHidden>
+            ▮
+          </Text>
+          <Text variant="title" accessibilityRole="header">
+            {title}
+          </Text>
+        </View>
         {subtitle === undefined ? null : (
-          <Text variant="body" tone="muted">
+          <Text variant="caption" tone="muted">
             {subtitle}
           </Text>
         )}
+        {/* A rule under the title, in place of the card that used to frame it. */}
+        <View style={[styles.rule, { backgroundColor: colors.border }]} />
       </View>
     );
 
@@ -77,6 +90,15 @@ const styles = StyleSheet.create({
   },
   flex: {
     flex: 1,
+  },
+  rule: {
+    height: 1,
+    marginTop: Spacing.xs,
+  },
+  titleRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: Spacing.sm,
   },
   header: {
     gap: Spacing.xs,

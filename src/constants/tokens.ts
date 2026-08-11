@@ -1,3 +1,5 @@
+import { Platform } from 'react-native';
+
 /**
  * Design tokens (UI_SPEC §17, §12).
  *
@@ -32,9 +34,11 @@ export type Spacing = (typeof Spacing)[keyof typeof Spacing];
 /** Corner radii. */
 export const Radius = {
   none: 0,
-  sm: 6,
-  md: 12,
-  lg: 20,
+  // Square by design. A terminal has corners; rounding them was the single
+  // biggest thing making the interface read as a generic mobile app.
+  sm: 0,
+  md: 0,
+  lg: 0,
   pill: 999,
 } as const;
 
@@ -44,14 +48,27 @@ export const Radius = {
  * `lineHeight` is carried with each size because §10 requires dynamic text
  * support: when a user scales text up, a hard-coded line height clips it.
  */
+/**
+ * The monospace family, per platform.
+ *
+ * Every size uses it. A terminal's whole legibility comes from a fixed advance
+ * width — packet counts, hashes and session ids line up in columns without any
+ * layout work, and mixing a proportional face in would undo that.
+ */
+export const MONO_FAMILY = Platform.select({
+  android: 'monospace',
+  ios: 'Menlo',
+  default: 'Courier New',
+});
+
 export const Typography = {
-  display: { fontSize: 32, lineHeight: 40, fontWeight: '700' },
-  title: { fontSize: 24, lineHeight: 32, fontWeight: '600' },
-  heading: { fontSize: 18, lineHeight: 26, fontWeight: '600' },
-  body: { fontSize: 16, lineHeight: 24, fontWeight: '400' },
-  label: { fontSize: 14, lineHeight: 20, fontWeight: '500' },
-  caption: { fontSize: 13, lineHeight: 18, fontWeight: '400' },
-  mono: { fontSize: 14, lineHeight: 20, fontWeight: '400' },
+  display: { fontSize: 26, lineHeight: 34, fontWeight: '700', fontFamily: MONO_FAMILY },
+  title: { fontSize: 20, lineHeight: 28, fontWeight: '700', fontFamily: MONO_FAMILY },
+  heading: { fontSize: 15, lineHeight: 22, fontWeight: '700', fontFamily: MONO_FAMILY },
+  body: { fontSize: 14, lineHeight: 22, fontWeight: '400', fontFamily: MONO_FAMILY },
+  label: { fontSize: 13, lineHeight: 20, fontWeight: '500', fontFamily: MONO_FAMILY },
+  caption: { fontSize: 12, lineHeight: 18, fontWeight: '400', fontFamily: MONO_FAMILY },
+  mono: { fontSize: 13, lineHeight: 20, fontWeight: '400', fontFamily: MONO_FAMILY },
 } as const;
 
 export type TypographyToken = keyof typeof Typography;
@@ -89,21 +106,18 @@ export const Duration = {
 
 /** Elevation shadows (§17), expressed so both platforms can consume them. */
 export const Shadow = {
+  // All flat. Elevation implies a material surface floating above another,
+  // which is the opposite of what a terminal is: one plane, divided by rules.
   none: { elevation: 0, shadowOpacity: 0, shadowRadius: 0, shadowOffset: { width: 0, height: 0 } },
-  sm: { elevation: 2, shadowOpacity: 0.12, shadowRadius: 4, shadowOffset: { width: 0, height: 1 } },
-  md: {
-    elevation: 6,
-    shadowOpacity: 0.16,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 },
-  },
+  sm: { elevation: 0, shadowOpacity: 0, shadowRadius: 0, shadowOffset: { width: 0, height: 0 } },
+  md: { elevation: 0, shadowOpacity: 0, shadowRadius: 0, shadowOffset: { width: 0, height: 0 } },
 } as const;
 
 /**
- * A complete colour set for one theme.
+ * A complete set of surface and content colours.
  *
- * Named by role rather than by hue — `danger` rather than `red` — so a theme
- * can change a colour without every usage becoming a lie.
+ * Every colour a screen may use is named here. A component that reached for a
+ * literal would be one the theme could not follow.
  */
 export interface ColorScheme {
   readonly background: string;
@@ -119,51 +133,63 @@ export interface ColorScheme {
   readonly warning: string;
   readonly danger: string;
   readonly overlay: string;
-  /** Always pure black and white: QR codes must not be themed (QR_SPEC §13). */
+  /**
+   * QR colours, which are **not** part of the theme.
+   *
+   * QR_SPEC §13 requires black on white with no transparency. A dark-themed QR
+   * code does not scan, so these are identical in every scheme and a screen
+   * must never substitute a themed colour for them.
+   */
   readonly qrForeground: string;
   readonly qrBackground: string;
 }
 
-/**
- * Light and dark palettes (§12).
- *
- * Status colours are chosen to differ in lightness as well as hue, so §10's
- * colour-blind-friendly requirement is met without relying on hue alone. Every
- * text/background pair meets WCAG AA at body size.
- */
 export const LightColors: ColorScheme = Object.freeze({
-  background: '#FFFFFF',
-  surface: '#F7F8FA',
-  surfaceAlt: '#EEF0F4',
-  border: '#D8DCE3',
-  text: '#111318',
-  textMuted: '#5A6270',
-  textInverse: '#FFFFFF',
-  primary: '#1F5EFF',
+  // The same terminal on paper, for anyone who cannot read light-on-dark.
+  // Amber is darkened to keep contrast on a pale ground; the logo's #FBB040
+  // sits at about 2:1 on cream, which is unreadable as text.
+  background: '#FAF7F0',
+  surface: '#F3EFE4',
+  surfaceAlt: '#EBE5D6',
+  border: '#D6CBB2',
+  text: '#2E2208',
+  textMuted: '#6E5518',
+  textInverse: '#FAF7F0',
+  primary: '#9A6B0F',
   primaryText: '#FFFFFF',
-  success: '#12693C',
+  success: '#5C4A12',
   warning: '#8A5A00',
-  danger: '#B3261E',
-  overlay: 'rgba(17, 19, 24, 0.55)',
+  danger: '#A33116',
+  overlay: 'rgba(46, 34, 8, 0.5)',
+  // Never themed. See the note on ColorScheme.
   qrForeground: '#000000',
   qrBackground: '#FFFFFF',
 });
 
 export const DarkColors: ColorScheme = Object.freeze({
-  background: '#0E1116',
-  surface: '#171B22',
-  surfaceAlt: '#20252E',
-  border: '#2C323C',
-  text: '#F2F4F8',
-  textMuted: '#A3ACBB',
-  textInverse: '#0E1116',
-  primary: '#6E9BFF',
-  primaryText: '#0E1116',
-  success: '#5FD08A',
-  warning: '#E8B25C',
-  danger: '#FF8A80',
-  overlay: 'rgba(0, 0, 0, 0.65)',
-  // Unchanged between themes: a dark-themed QR code does not scan.
+  // Amber phosphor. #FBB040 is the logo's only colour, and amber on near-black
+  // is what a photon-carrying terminal should look like. Contrast of amber on
+  // this ground is roughly 10:1 — comfortably past WCAG AA for body text.
+  background: '#0B0B0C',
+  surface: '#121210',
+  surfaceAlt: '#17150F',
+  // Rules, not boxes. Dividing one plane rather than stacking several.
+  border: '#2A2118',
+  text: '#FBB040',
+  // Dimmed amber rather than grey: a second hue would break the monochrome.
+  // Roughly 6:1 on the ground, so captions stay readable.
+  textMuted: '#B8873A',
+  textInverse: '#0B0B0C',
+  primary: '#FBB040',
+  primaryText: '#0B0B0C',
+  // Semantic states stay inside the amber family and separate by brightness,
+  // except danger — a refusal is the one thing worth breaking the palette for.
+  success: '#FFD98A',
+  warning: '#FF9F1C',
+  danger: '#FF6B4A',
+  overlay: 'rgba(11, 11, 12, 0.85)',
+  // **Never themed.** §13 requires black on white, and a dark QR does not
+  // scan — the receiver's camera needs the contrast the standard assumes.
   qrForeground: '#000000',
   qrBackground: '#FFFFFF',
 });

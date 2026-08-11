@@ -6,7 +6,7 @@
  */
 import { StyleSheet, View, type ViewProps } from 'react-native';
 
-import { Radius, Shadow, Spacing } from '@constants/tokens';
+import { Radius, Spacing } from '@constants/tokens';
 
 import { useTheme } from './ThemeProvider';
 
@@ -22,7 +22,10 @@ export function Card({ elevated = false, style, ...rest }: CardProps) {
       style={[
         styles.card,
         { backgroundColor: colors.surface, borderColor: colors.border },
-        elevated ? Shadow.sm : null,
+        // `elevated` is honoured as a slightly lighter surface rather than a
+        // shadow: the terminal is one flat plane, and depth is expressed by
+        // value, not by casting light.
+        elevated ? { backgroundColor: colors.surfaceAlt } : null,
         style,
       ]}
       {...rest}
@@ -33,7 +36,7 @@ export function Card({ elevated = false, style, ...rest }: CardProps) {
 const styles = StyleSheet.create({
   card: {
     borderRadius: Radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     padding: Spacing.md,
   },
 });

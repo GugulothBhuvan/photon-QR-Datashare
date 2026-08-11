@@ -40,12 +40,21 @@ export function Button({
 }: ButtonProps) {
   const { colors } = useTheme();
 
+  // Terminal styling: everything is outlined rather than filled, except the
+  // primary action, which is the one thing a filled block should mark. Filling
+  // several buttons on one screen makes them compete; an amber block that
+  // appears once says "this is the action" without any other emphasis.
   const palette = {
-    primary: { background: colors.primary, text: colors.primaryText, border: 'transparent' },
-    secondary: { background: colors.surface, text: colors.text, border: colors.border },
-    ghost: { background: 'transparent', text: colors.primary, border: 'transparent' },
-    danger: { background: colors.danger, text: colors.textInverse, border: 'transparent' },
+    primary: { background: colors.primary, text: colors.primaryText, border: colors.primary },
+    secondary: { background: 'transparent', text: colors.text, border: colors.border },
+    ghost: { background: 'transparent', text: colors.textMuted, border: 'transparent' },
+    danger: { background: 'transparent', text: colors.danger, border: colors.danger },
   }[variant];
+
+  // A caret marks an actionable line, the way a prompt does. Only on outlined
+  // buttons: on the filled primary the block is already the affordance, and a
+  // caret there would be belt and braces.
+  const marker = variant === 'primary' || icon !== undefined ? undefined : '▸';
 
   return (
     <Pressable
@@ -71,6 +80,11 @@ export function Button({
             {icon}
           </Text>
         )}
+        {marker === undefined ? null : (
+          <Text variant="label" style={{ color: palette.text }}>
+            {marker}
+          </Text>
+        )}
         <Text variant="label" style={{ color: palette.text }}>
           {label}
         </Text>
@@ -83,7 +97,7 @@ const styles = StyleSheet.create({
   base: {
     alignItems: 'center',
     borderRadius: Radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     justifyContent: 'center',
     // §2, §8: never smaller than the platform's minimum touch target.
     minHeight: MIN_TOUCH_TARGET,
