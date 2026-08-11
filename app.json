@@ -5,7 +5,7 @@
     "version": "0.1.0",
     "orientation": "portrait",
     "scheme": "photon",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "dark",
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
@@ -14,13 +14,29 @@
     "android": {
       "package": "com.photon.app",
       "edgeToEdgeEnabled": true,
-      "permissions": ["android.permission.CAMERA"]
+      "permissions": ["android.permission.CAMERA"],
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0B0B0C"
+      }
     },
     "web": {
       "bundler": "metro",
       "output": "static"
     },
-    "plugins": ["expo-router", "expo-status-bar", "expo-splash-screen"],
+    "plugins": [
+      "expo-router",
+      "expo-status-bar",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 180,
+          "resizeMode": "contain",
+          "backgroundColor": "#0B0B0C"
+        }
+      ]
+    ],
     "experiments": {
       "typedRoutes": true,
       "tsconfigPaths": true
@@ -31,6 +47,8 @@
         "projectId": "32fb518f-5834-441e-9c0e-87893676ede1"
       }
     },
-    "owner": "bhuvanraj05"
+    "owner": "bhuvanraj05",
+    "icon": "./assets/icon.png",
+    "backgroundColor": "#0B0B0C"
   }
 }
