@@ -69,6 +69,15 @@ export interface DiscoveryState {
   readonly refusal: DiscoveryRefusal | undefined;
   /** Frames seen since listening began, whether or not they decoded. */
   readonly framesSeen: number;
+  /**
+   * Frames a QR symbol was actually read from.
+   *
+   * Held separately from `framesSeen` because the two distinguish the failures
+   * that look identical from outside: no frames at all is a camera that is not
+   * delivering, and frames without decodes is an optical problem — distance,
+   * focus, glare, or a code too dense for the resolution.
+   */
+  readonly framesDecoded: number;
 }
 
 export interface DiscoveryOptions {
@@ -94,20 +103,33 @@ export interface DiscoveryService {
    * @param onReady Called once, when a manifest has been accepted and a
    *   session exists. The receive flow starts collecting from there.
    */
-  listen(onReady: (sessionId: SessionId, manifest: Manifest) => void): DiscoveryListener;
+  listen(
+    onReady: (sessionId: SessionId, manifest: Manifest) => void,
+    /**
+     * Called after every frame, with what has been learned.
+     *
+     * Without this a receiver searching for a sender reports nothing at all:
+     * the frame counters on screen come from a receive session, and no session
+     * exists until discovery has already succeeded. A camera delivering
+     * nothing and a camera delivering frames that will not decode looked
+     * identical, which is what made this failure take four attempts to place.
+     */
+    onChange?: (state: DiscoveryState) => void,
+  ): DiscoveryListener;
 }
 
 export function createDiscoveryService(options: DiscoveryOptions): DiscoveryService {
   const { camera, decoder, sessions, manifests, supportedVersions } = options;
 
   return {
-    listen(onReady) {
+    listen(onReady, onChange) {
       let stage: DiscoveryStage = DiscoveryStage.Searching;
       let announcement: HandshakeAnnouncement | undefined;
       let sessionId: SessionId | undefined;
       let manifest: Manifest | undefined;
       let refusal: DiscoveryRefusal | undefined;
       let framesSeen = 0;
+      let framesDecoded = 0;
       let stopped = false;
 
       function consume(frame: CameraFrame): void {
@@ -118,6 +140,8 @@ export function createDiscoveryService(options: DiscoveryOptions): DiscoveryServ
         if (!decoded.ok) {
           return;
         }
+
+        framesDecoded += 1;
 
         // No expected session yet — that is the whole point. The session id
         // arrives *in* the packet, so it cannot be checked against one.
@@ -178,10 +202,21 @@ export function createDiscoveryService(options: DiscoveryOptions): DiscoveryServ
         onReady(sessionId, manifest);
       }
 
+      function snapshot(): DiscoveryState {
+        return { stage, announcement, sessionId, manifest, refusal, framesSeen, framesDecoded };
+      }
+
       const unsubscribe = camera.onFrame((frame) => {
-        if (!stopped) {
-          consume(frame);
+        if (stopped) {
+          return;
         }
+
+        consume(frame);
+
+        // Reported on every frame, not only on a change of stage: a counter
+        // that moves is the only evidence a receiver can offer that the camera
+        // is alive at all.
+        onChange?.(snapshot());
       });
 
       return {
@@ -193,9 +228,7 @@ export function createDiscoveryService(options: DiscoveryOptions): DiscoveryServ
           unsubscribe();
         },
 
-        state() {
-          return { stage, announcement, sessionId, manifest, refusal, framesSeen };
-        },
+        state: snapshot,
       };
     },
   };

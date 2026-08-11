@@ -11,7 +11,11 @@
 import type { CameraAdapter } from '@camera/cameraPort';
 import { CameraPermission } from '@camera/cameraPort';
 
-import type { DiscoveryListener, DiscoveryService } from '@services/discoveryService';
+import type {
+  DiscoveryListener,
+  DiscoveryRefusal,
+  DiscoveryService,
+} from '@services/discoveryService';
 import type {
   CompletedFile,
   ReceiveProgress,
@@ -59,6 +63,14 @@ export interface ReceiveState {
   readonly missingPackets: number;
   readonly framesSeen: number;
   readonly framesDecoded: number;
+  /**
+   * Why a sender was read and refused (§14).
+   *
+   * A refusal used to leave the screen saying "Looking for a sender" forever:
+   * discovery recorded it and nothing published it. A receiver that has
+   * decided it cannot speak to the device in front of it must say so.
+   */
+  readonly refusalReason: string | undefined;
   readonly errorMessage: string | undefined;
 }
 
@@ -71,8 +83,43 @@ export const initialReceiveState: ReceiveState = Object.freeze({
   missingPackets: 0,
   framesSeen: 0,
   framesDecoded: 0,
+  refusalReason: undefined,
   errorMessage: undefined,
 });
+
+/**
+ * A refusal, in words a user can act on (§14, ARCHITECTURE §6.11).
+ *
+ * Protocol vocabulary does not reach a screen. `UNSUPPORTED_VERSION` tells a
+ * user nothing; "the other device speaks a newer version" tells them the
+ * transfer will not work however long they hold the phone there.
+ */
+export function describeRefusal(refusal: DiscoveryRefusal | undefined): string | undefined {
+  if (refusal === undefined) {
+    return undefined;
+  }
+
+  if (refusal.kind === 'HANDSHAKE') {
+    switch (refusal.reason) {
+      case 'UNSUPPORTED_VERSION':
+        return 'The other device is using a version of the protocol this app does not support.';
+      case 'UNSUPPORTED_CAPABILITY':
+        return 'The other device needs a feature this app does not have.';
+      default:
+        return 'The signal from the other device was incomplete.';
+    }
+  }
+
+  switch (refusal.reason) {
+    case 'UNSUPPORTED_ENCODING_VERSION':
+      return 'The other device described its files in a format this app cannot read.';
+    case 'COUNT_MISMATCH':
+    case 'INVALID_FIELD':
+      return 'The file list from the other device did not make sense.';
+    default:
+      return 'The file list from the other device was incomplete.';
+  }
+}
 
 export interface ReceiveController {
   readonly state: Store<ReceiveState>;
@@ -185,17 +232,39 @@ export function createReceiveController(options: ReceiveControllerOptions): Rece
 
         // Collection begins only once a manifest has been accepted — until
         // then there is nothing to place packets against (§10.14).
-        listener = discovery.listen((sessionId) => {
-          session = receives.start(sessionId, applyProgress);
+        listener = discovery.listen(
+          (sessionId) => {
+            session = receives.start(sessionId, applyProgress);
 
-          state.setState((previous) => ({
-            ...previous,
-            stage: ReceiveStage.Scanning,
-            sessionId,
-          }));
+            state.setState((previous) => ({
+              ...previous,
+              stage: ReceiveStage.Scanning,
+              sessionId,
+              refusalReason: undefined,
+            }));
 
-          applyProgress(session.progress());
-        });
+            applyProgress(session.progress());
+          },
+
+          // Published on every frame while searching. These counters are the
+          // only evidence a receiver can offer that its camera is alive, and
+          // until now they came from a session that does not exist yet — so
+          // the screen read zero whether or not frames were arriving.
+          (progress) => {
+            state.setState((previous) =>
+              // A live session owns the counters from here on; discovery keeps
+              // reading frames it no longer interprets.
+              previous.stage === ReceiveStage.Scanning || previous.stage === ReceiveStage.Complete
+                ? previous
+                : {
+                    ...previous,
+                    framesSeen: progress.framesSeen,
+                    framesDecoded: progress.framesDecoded,
+                    refusalReason: describeRefusal(progress.refusal),
+                  },
+            );
+          },
+        );
 
         state.setState((previous) => ({ ...previous, stage: ReceiveStage.Searching }));
       } catch (error: unknown) {

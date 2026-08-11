@@ -198,6 +198,34 @@ export function ReceiveScreen({
         </Text>
 
         {/*
+          What the counters mean while searching, said plainly. Three failures
+          look identical from outside — a camera delivering nothing, frames
+          that will not decode, and a sender that has not started — and this is
+          the difference between a bug report that takes a minute and one that
+          takes four device sessions.
+        */}
+        {state.stage !== ReceiveStage.Searching ? null : (
+          <Text variant="caption" tone="muted">
+            {state.framesSeen === 0
+              ? 'No frames from the camera yet.'
+              : state.framesDecoded === 0
+                ? `Camera working (${String(state.framesSeen)} frames), but no code read yet — try moving closer or further away.`
+                : `Reading codes (${String(state.framesDecoded)} of ${String(state.framesSeen)} frames).`}
+          </Text>
+        )}
+
+        {/*
+          §14: a sender that was read and refused must say so. This used to be
+          recorded by discovery and published nowhere, so an incompatible
+          device left the screen searching forever.
+        */}
+        {state.refusalReason === undefined ? null : (
+          <Text variant="caption" tone="danger">
+            {state.refusalReason}
+          </Text>
+        )}
+
+        {/*
           §14: a camera that loaded and then failed must say so. Without this
           the interface showed an empty preview, which looks exactly like a
           working camera pointed at nothing.

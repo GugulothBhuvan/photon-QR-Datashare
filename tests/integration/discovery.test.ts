@@ -13,6 +13,21 @@
 import { DiscoveryStage } from '@services/discoveryService';
 
 import { captureOf, createHarness } from '../support/opticalHarness';
+import { PixelFormat, type CameraFrame } from '@camera/cameraPort';
+
+/** A frame with no QR code in it — a camera pointed at a blank wall. */
+function blankCapture(): CameraFrame {
+  const width = 64;
+  const height = 64;
+
+  return {
+    width,
+    height,
+    format: PixelFormat.Rgba,
+    data: new Uint8ClampedArray(width * height * 4).fill(255),
+    timestamp: 0,
+  };
+}
 
 const PACKET_SIZE = 128;
 const FILE = {
@@ -131,6 +146,46 @@ describe('receiver discovery (§7.4–§7.6)', () => {
     harness.camera.emitAll();
 
     expect(calls).toBe(1);
+    listener.stop();
+  });
+
+  it('reports frames and decodes as they arrive, not only at the end', async () => {
+    // A receiver searching for a sender had no way to say the camera was
+    // alive: the counters on screen came from a receive session, and no
+    // session exists until discovery has already succeeded. So "no frames at
+    // all" and "frames that will not decode" looked identical, which is what
+    // made this failure take four attempts to place.
+    const { harness, prepared } = preparedFrames('0a700000');
+    const reports: { framesSeen: number; framesDecoded: number }[] = [];
+
+    const listener = harness.graph.discovery.listen(
+      () => undefined,
+      (state) => reports.push({ framesSeen: state.framesSeen, framesDecoded: state.framesDecoded }),
+    );
+
+    await harness.camera.start();
+    harness.camera.push(captureOf(prepared.frames.at(0)!));
+    harness.camera.emitAll();
+
+    expect(reports).toHaveLength(1);
+    expect(reports[0]?.framesSeen).toBe(1);
+    listener.stop();
+  });
+
+  it('counts a frame it could not decode as seen but not decoded', async () => {
+    // The distinction the receive screen needs: a camera that is delivering,
+    // pointed at something that is not a QR code.
+    const { harness } = preparedFrames('0a800000');
+    const listener = harness.graph.discovery.listen(() => undefined);
+
+    await harness.camera.start();
+    harness.camera.push(blankCapture());
+    harness.camera.emitAll();
+
+    const state = listener.state();
+
+    expect(state.framesSeen).toBe(1);
+    expect(state.framesDecoded).toBe(0);
     listener.stop();
   });
 
