@@ -24,6 +24,7 @@ import {
   formatThroughput,
   HistoryScreen,
   HomeScreen,
+  ReceiveScreen,
   SendScreen,
   SettingsScreen,
   TransferProgressScreen,
@@ -407,6 +408,57 @@ describe('Send (UI-003, §5.2)', () => {
     graph.send.advance();
 
     expect(graph.send.state.getState().position?.index).toBe(1);
+  });
+});
+
+describe('Receive camera availability (Stage 0)', () => {
+  /*
+   * Three device sessions were lost to a camera that failed silently: a
+   * VisionCamera 5 API mismatch threw, a bare `catch` swallowed it, and the
+   * screen showed a placeholder that looked like a camera which had not
+   * focused. These pin the reporting that was missing.
+   */
+
+  it('says why the camera is unavailable rather than showing a dead placeholder', async () => {
+    const graph = makeGraph();
+
+    await render(
+      wrap(
+        {
+          ...graph,
+          cameraUnavailableReason: 'VisionCamera.requestCameraPermission is not a function',
+        },
+        <ReceiveScreen onBack={jest.fn()} />,
+      ),
+    );
+
+    expect(screen.getByText('Camera unavailable on this device')).toBeOnTheScreen();
+    // The actual reason reaches the user, not a generic apology.
+    expect(screen.getByText(/is not a function/)).toBeOnTheScreen();
+  });
+
+  it('reports the failure before asking for permission', async () => {
+    // Asking for permission when the module never loaded is worse than
+    // useless: the user grants it and still sees nothing.
+    const graph = makeGraph();
+
+    await render(
+      wrap(
+        { ...graph, cameraUnavailableReason: 'native module missing' },
+        <ReceiveScreen onBack={jest.fn()} />,
+      ),
+    );
+
+    expect(screen.queryByText('Camera access required')).toBeNull();
+  });
+
+  it('still asks for permission when the camera itself is fine', async () => {
+    const graph = makeGraph();
+
+    await render(wrap(graph, <ReceiveScreen onBack={jest.fn()} />));
+
+    expect(screen.getByText('Camera access required')).toBeOnTheScreen();
+    expect(screen.queryByText('Camera unavailable on this device')).toBeNull();
   });
 });
 

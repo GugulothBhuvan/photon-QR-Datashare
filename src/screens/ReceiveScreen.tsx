@@ -33,13 +33,32 @@ export interface ReceiveScreenProps {
 }
 
 export function ReceiveScreen({ onBack, onComplete }: ReceiveScreenProps) {
-  const { receive, cameraPreview: CameraPreview } = useAppServices();
+  const { receive, cameraPreview: CameraPreview, cameraUnavailableReason } = useAppServices();
   const state = useStore(receive.state);
   const { colors } = useTheme();
 
-  // §14: a clear title, an explanation, and a recovery action. The stage says
-  // this rather than the raw permission value — camera vocabulary belongs to
-  // the adapter, and the controller has already translated it.
+  // §14: a clear title, an explanation, and a recovery action.
+  //
+  // This comes before the permission gate deliberately. If the camera module
+  // itself failed to load, asking for permission is pointless — the user would
+  // grant it and still see nothing. Saying so is the difference between a bug
+  // report that takes minutes and one that takes three device sessions.
+  if (CameraPreview === undefined && cameraUnavailableReason !== undefined) {
+    return (
+      <Screen title="Receive">
+        <ErrorState
+          title="Camera unavailable on this device"
+          description={`The camera could not be started: ${cameraUnavailableReason}`}
+          actionLabel="Back"
+          onAction={onBack}
+        />
+      </Screen>
+    );
+  }
+
+  // §14 again for permission. The stage says this rather than the raw
+  // permission value — camera vocabulary belongs to the adapter, and the
+  // controller has already translated it.
   if (state.stage === ReceiveStage.NeedsPermission) {
     return (
       <Screen title="Receive">

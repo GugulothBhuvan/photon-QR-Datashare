@@ -54,10 +54,22 @@ export function CameraSource({ camera, targetWidth = 1280 }: CameraSourceProps) 
   const permission = useCameraPermission();
 
   useEffect(() => {
+    // Three states, not two. `hasPermission ? Granted : Denied` would report a
+    // user who has never been asked as having refused — and the receive
+    // screen's §14 recovery action keys off exactly that difference: it offers
+    // to ask again when the answer is Undetermined, and cannot help when the
+    // user has actually refused.
+    //
+    // v5 gives the current status only through this hook, which is why the
+    // adapter starts Undetermined and learns the truth here.
     camera.setPermission(
-      permission.hasPermission ? CameraPermission.Granted : CameraPermission.Denied,
+      permission.hasPermission
+        ? CameraPermission.Granted
+        : permission.canRequestPermission
+          ? CameraPermission.Undetermined
+          : CameraPermission.Denied,
     );
-  }, [camera, permission.hasPermission]);
+  }, [camera, permission.hasPermission, permission.canRequestPermission]);
 
   /**
    * Hands one frame to the JavaScript thread.

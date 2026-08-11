@@ -121,6 +121,14 @@ export interface AppGraph {
    */
   readonly cameraPreview?: ComponentType;
   /**
+   * Why there is no camera preview, when there is none.
+   *
+   * A device build that cannot reach its camera must say so. Showing the
+   * placeholder alone made a failed native module look like a camera that had
+   * not focused yet, which cost three device sessions to work out.
+   */
+  readonly cameraUnavailableReason?: string;
+  /**
    * Opens the platform file picker (A12-02).
    *
    * Resolves empty when the user cancels, or when the platform has no picker —
@@ -249,6 +257,9 @@ export function createAppGraph(options: AppCompositionOptions = {}): AppGraph {
         status: files.isDevice ? 'Available' : (files.unavailableReason ?? 'Unavailable'),
       },
     ],
+    ...(platform?.unavailableReason === undefined
+      ? {}
+      : { cameraUnavailableReason: platform.unavailableReason }),
     pickFiles: files.pickFiles,
     saveFile: files.saveFile,
     now: () => clock.now(),

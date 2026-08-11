@@ -38,6 +38,8 @@ export interface AppServices {
    * can render without knowing what is inside (ADR-0005).
    */
   readonly cameraPreview?: ComponentType;
+  /** Why there is no camera preview, when there is none. */
+  readonly cameraUnavailableReason?: string;
   /** Opens the platform file picker (A12-02). Empty when cancelled. */
   readonly pickFiles: () => Promise<readonly { name: string; content: Uint8Array }[]>;
   /** Saves a received file, returning where it was written. */

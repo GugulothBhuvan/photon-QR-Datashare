@@ -65,27 +65,22 @@ export function createPlatformCamera(force?: 'memory'): PlatformCamera {
     const device = require('@camera/deviceCamera') as typeof import('@camera/deviceCamera');
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const vision = require('react-native-vision-camera') as {
-      Camera: { getCameraPermissionStatus(): string; requestCameraPermission(): Promise<string> };
+      VisionCamera: { requestCameraPermission(): Promise<boolean> };
     };
 
     const camera = device.createDeviceCamera({
-      requestPermission: async () => {
-        const status = await vision.Camera.requestCameraPermission();
-        return status === 'granted' || status === 'authorized';
-      },
-      currentPermission: () => {
-        const status = vision.Camera.getCameraPermissionStatus();
+      // VisionCamera 5's imperative entry point. The v3/v4 statics
+      // `Camera.requestCameraPermission` and `Camera.getCameraPermissionStatus`
+      // do not exist here — calling them threw, and the fallback below hid it,
+      // which is why no permission dialog ever appeared on a device.
+      requestPermission: () => vision.VisionCamera.requestCameraPermission(),
 
-        if (status === 'granted' || status === 'authorized') {
-          return CameraPermission.Granted;
-        }
-
-        // VisionCamera distinguishes "never asked" from "refused"; so does the
-        // port, and the receive screen's recovery action depends on it.
-        return status === 'not-determined'
-          ? CameraPermission.Undetermined
-          : CameraPermission.Denied;
-      },
+      // v5 exposes the *current* status only through the `useCameraPermission`
+      // hook, which cannot be called outside React. So the adapter starts
+      // undetermined and `CameraSource` reports the real status through
+      // `setPermission` as soon as it mounts. Undetermined is the honest
+      // starting value: the app genuinely does not know yet.
+      currentPermission: () => CameraPermission.Undetermined,
     });
 
     const Preview: ComponentType = () => binding.CameraSource({ camera });
