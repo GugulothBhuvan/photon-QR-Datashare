@@ -25,7 +25,7 @@ import {
   Text,
 } from '@components/index';
 import { Spacing } from '@constants/tokens';
-import { SendStage } from '@controllers/sendController';
+import { PACKET_SIZE_OPTIONS, SendStage } from '@controllers/sendController';
 import { useAppServices, useFrameDriver, useStore, useTransferDisplay } from '@hooks/index';
 import { QRSpeedPreference } from '@domain/settings';
 
@@ -193,6 +193,18 @@ export function SendScreen({ onPickFiles, onBack, frameSize, onCancel }: SendScr
             value={position === undefined ? 0 : (position.index + 1) / position.frameCount}
             label="Frames displayed"
           />
+
+          {/*
+            What the settings produced. This is where a user is when they find
+            out the other device cannot read the code, so it is where the
+            numbers that explain why belong.
+          */}
+          {state.qrModules === undefined ? null : (
+            <Text variant="caption" tone="muted">
+              {`${String(state.packetSize)} bytes per code · QR version ${String((state.qrModules - 17) / 4)} · ${String(state.qrModules)} modules`}
+            </Text>
+          )}
+
           <Text variant="caption" tone="muted">
             Point the other device at this screen. The sequence repeats until you stop it.
           </Text>
@@ -229,6 +241,34 @@ export function SendScreen({ onPickFiles, onBack, frameSize, onCancel }: SendScr
               <Button label="Add more" variant="ghost" onPress={onPickFiles} />
             </View>
           </View>
+        )}
+      </Card>
+
+      <Card>
+        <Text variant="heading">Bytes per frame</Text>
+        <Text variant="caption" tone="muted">
+          More bytes per code means fewer codes to show. Fewer bytes means a simpler code the other
+          camera can read from further away.
+        </Text>
+        <View style={styles.row}>
+          {PACKET_SIZE_OPTIONS.map((size) => (
+            <Button
+              key={size}
+              label={String(size)}
+              variant={state.packetSize === size ? 'primary' : 'secondary'}
+              onPress={() => send.setPacketSize(size)}
+            />
+          ))}
+        </View>
+        {/*
+          What the setting produced, not just what was asked for. A byte count
+          is an abstraction; the number that decides whether the other camera
+          can read the code is how many modules it must resolve.
+        */}
+        {state.qrModules === undefined ? null : (
+          <Text variant="caption" tone="muted">
+            {`Produces QR version ${String((state.qrModules - 17) / 4)} — ${String(state.qrModules)} modules across, ${String(state.totalPackets)} codes`}
+          </Text>
         )}
       </Card>
 

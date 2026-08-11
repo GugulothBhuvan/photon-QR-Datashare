@@ -14,7 +14,12 @@ import { createStore } from '@state/store';
 import { ThemeProvider } from '@components/ThemeProvider';
 import { createAppGraph, createMemorySettingsRepository } from '@config/appComposition';
 import type { Clock, IdGenerator } from '@core/contracts';
-import { SendStage } from '@controllers/sendController';
+import {
+  DEFAULT_PACKET_SIZE,
+  PACKET_SIZE_OPTIONS,
+  RELIABLE_PACKET_SIZE,
+  SendStage,
+} from '@controllers/sendController';
 import { QRSpeedPreference } from '@domain/settings';
 import { FRAME_DURATION_MS, FrameRate } from '@qr/frameScheduler';
 import { AppServicesProvider } from '@hooks/useAppServices';
@@ -215,6 +220,28 @@ describe('Send (UI-003, §5.2)', () => {
     expect(screen.getByText('notes.txt')).toBeOnTheScreen();
     expect(screen.getByText('3 bytes')).toBeOnTheScreen();
     expect(screen.getByRole('button', { name: 'Start transfer' })).not.toBeDisabled();
+  });
+
+  it('offers bytes per frame, which is the throughput lever (§5.2)', async () => {
+    // A decode costs about the same whatever the payload, so bytes per frame
+    // is nearly free throughput where frame rate is not. It was fixed and
+    // hidden, which left a user with no way to trade density for speed.
+    const graph = makeGraph();
+    graph.send.addFiles([{ name: 'a.bin', content: Uint8Array.from([1, 2, 3]) }]);
+
+    const user = userEvent.setup();
+    await render(wrap(graph, <SendScreen onPickFiles={jest.fn()} onBack={jest.fn()} />));
+
+    await user.press(screen.getByRole('button', { name: String(RELIABLE_PACKET_SIZE) }));
+
+    expect(graph.send.state.getState().packetSize).toBe(RELIABLE_PACKET_SIZE);
+  });
+
+  it('offers the value its own troubleshooting advice names', () => {
+    // The receiver tells a struggling user to drop to a specific number. If
+    // the sender does not offer it, the advice is unfollowable.
+    expect(PACKET_SIZE_OPTIONS).toContain(RELIABLE_PACKET_SIZE);
+    expect(PACKET_SIZE_OPTIONS).toContain(DEFAULT_PACKET_SIZE);
   });
 
   it('starts a real transfer and shows the codes on one press (§5.2)', async () => {

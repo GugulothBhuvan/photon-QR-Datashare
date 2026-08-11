@@ -80,6 +80,17 @@ export interface SendState {
   readonly speed: QRSpeedPreference;
   readonly sessionId: SessionId | undefined;
   readonly totalPackets: number;
+  /**
+   * Modules across the QR codes this transfer produces.
+   *
+   * Shown because bytes per frame is otherwise an abstraction: the number that
+   * decides whether the other camera can read the code is how many modules it
+   * has to resolve, and a user changing a byte count cannot see that. Decimen
+   * shows the same thing and it is the reason its tuning advice is usable.
+   *
+   * `undefined` until a transfer has been prepared.
+   */
+  readonly qrModules: number | undefined;
   /** `undefined` until a transfer has been prepared. */
   readonly position: FramePosition | undefined;
   /**
@@ -94,25 +105,57 @@ export interface SendState {
 }
 
 /**
+ * What the receiver's "nothing decoding" advice tells a user to drop to.
+ *
+ * The conservative end: 256 bytes plus the 54-byte header lands near QR
+ * version 12, about 65 modules across, so each module is large enough for a
+ * camera to resolve at distance or through a soft focus.
+ */
+export const RELIABLE_PACKET_SIZE = 256;
+
+/**
  * Default payload size.
  *
- * Lowered from 512. Fitting inside the QR capacity is the easy constraint; the
- * one that decides whether a transfer works at all is how many modules a
- * receiving camera has to resolve. 512 bytes plus the 54-byte header lands
- * near QR version 20 — around 97 modules across — and a phone camera reading
- * another phone's screen at arm's length has only a few pixels per module to
- * work with, before autofocus and hand tremor take their share.
+ * **Bytes per frame is what decides throughput, not frame rate.** A decode
+ * costs roughly the same whatever the payload, because most of it is spent
+ * locating the symbol — so doubling the payload nearly doubles throughput for
+ * nothing, while doubling the frame rate asks the receiver to decode twice as
+ * often, which it may simply be unable to do.
  *
- * 256 bytes lands near version 12, about 65 modules, which is roughly half the
- * density for the same physical code. The cost is more frames for the same
- * file, which the transport already handles: §11.11 loops, and a frame missed
- * is a frame repeated.
+ * 512 bytes plus the header lands near QR version 20, around 97 modules. That
+ * is denser than the reliable end and readable when the code fills the sending
+ * screen, which it now does. A user who cannot decode it is told to drop to
+ * `RELIABLE_PACKET_SIZE`, and can.
  *
- * Every optical-transfer implementation arrives at this trade, and the ones
- * with hardware behind them recommend cutting bytes per frame as the *first*
- * thing to try when nothing decodes.
+ * Still conservative: implementations with hardware behind them default an
+ * order of magnitude higher and treat these values as the fallback.
  */
-export const DEFAULT_PACKET_SIZE = 256;
+export const DEFAULT_PACKET_SIZE = 512;
+
+/**
+ * Payload sizes a user may choose, in bytes.
+ *
+ * **Bytes per frame is the throughput lever, not frame rate.** A decode costs
+ * roughly the same whatever the payload — most of it is locating the symbol —
+ * so doubling the payload nearly doubles throughput for free, while doubling
+ * the frame rate asks the receiver to decode twice as often, which it may not
+ * be able to do.
+ *
+ * The ceiling is QR capacity at medium error correction, 2331 bytes, less the
+ * 54-byte packet header. The floor is what a camera can resolve across a room:
+ * a smaller payload is a smaller QR version, fewer modules, and larger modules
+ * for the same physical code.
+ *
+ * The fallback the receiver's advice names is in this list by construction, so
+ * the guidance can never point at a setting the sender does not offer.
+ */
+export const PACKET_SIZE_OPTIONS: readonly number[] = Object.freeze([
+  RELIABLE_PACKET_SIZE,
+  DEFAULT_PACKET_SIZE,
+  1024,
+  1500,
+  2048,
+]);
 
 export const initialSendState: SendState = Object.freeze({
   stage: SendStage.Selecting,
@@ -122,6 +165,7 @@ export const initialSendState: SendState = Object.freeze({
   speed: QRSpeedPreference.Balanced,
   sessionId: undefined,
   totalPackets: 0,
+  qrModules: undefined,
   position: undefined,
   startedAt: undefined,
   errorMessage: undefined,
@@ -260,6 +304,7 @@ export function createSendController(options: SendControllerOptions): SendContro
         stage: SendStage.Ready,
         sessionId: preparedTransfer?.sessionId,
         totalPackets: preparedTransfer?.totalPackets ?? 0,
+        qrModules: preparedTransfer?.scheduler.current()?.size,
         position: {
           index: position.index,
           frameCount: position.frameCount,

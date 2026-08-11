@@ -26,6 +26,8 @@ import {
 } from '@components/index';
 import { Radius, Spacing } from '@constants/tokens';
 import { ReceiveStage } from '@controllers/receiveController';
+// The advice names a value the sender actually offers, by construction.
+import { RELIABLE_PACKET_SIZE } from '@controllers/sendController';
 import { useAppServices, useStore, useTransferDisplay } from '@hooks/index';
 import { useTheme } from '@components/ThemeProvider';
 import { createStore } from '@state/store';
@@ -336,14 +338,17 @@ export function ReceiveScreen({
               1. On the sender, tap the code to make it full screen.
             </Text>
             <Text variant="caption" tone="muted">
-              2. On the sender, choose Slow.
+              {`2. On the sender, drop bytes per frame to ${String(RELIABLE_PACKET_SIZE)}.`}
             </Text>
             <Text variant="caption" tone="muted">
-              3. Fill this camera&apos;s view with the code, and rest the phone against something —
+              3. On the sender, choose Slow.
+            </Text>
+            <Text variant="caption" tone="muted">
+              4. Fill this camera&apos;s view with the code, and rest the phone against something —
               a hunting autofocus is the usual culprit.
             </Text>
             <Text variant="caption" tone="muted">
-              4. Turn the sending screen&apos;s brightness all the way up.
+              5. Turn the sending screen&apos;s brightness all the way up.
             </Text>
           </View>
         ) : null}
