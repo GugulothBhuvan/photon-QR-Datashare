@@ -21,7 +21,8 @@ on both sides of it depends on the shape staying still.
 ## 1.1 Where they live
 
 ```text
-src/core/contracts/     Clock, IdGenerator, IntegrityVerifier, Logger, PacketCodec
+src/core/contracts/     Clock, IdGenerator, IntegrityVerifier, Logger, PacketCodec,
+                        PayloadCipher (provisional)
 src/camera/cameraPort   CameraAdapter, CameraFrame
 src/storage/ports       KeyValueStore, FileStore
 src/repositories/       Repository, ValueRepository
@@ -144,7 +145,7 @@ a **required** member would break that.
 | **Purpose** | The seam to whatever computes and checks digests. |
 | **Declared in** | `src/core/contracts/integrityVerifier.ts` |
 | **Owner** | Core protocol |
-| **Implementations** | Deterministic test digests. **No production implementation yet — Phase 11.** |
+| **Implementations** | `createSha256Verifier` (`src/security/integrity.ts`), plus deterministic test digests. |
 | **Stability** | **Stable** |
 
 ```ts
@@ -165,10 +166,16 @@ before completing a transfer) without computing it.
 algorithm it cannot perform, so *verification skipped* can never be reported as
 *verification passed*.
 
-**Breaking-change policy.** Phase 11 supplies SHA-256 against this exact shape.
-If §20 turns out to require streaming digests over large files, that is an
-**addition** (`createDigestStream`) rather than a change to these three members
-— a file small enough to hash in one call must keep working.
+**Breaking-change policy.** Phase 11 supplied SHA-256 against this exact shape,
+unchanged. If §20 turns out to require streaming digests over large files, that
+is an **addition** (`createDigestStream`) rather than a change to these three
+members — a file small enough to hash in one call must keep working.
+
+**Note on synchrony.** The shape being synchronous is what ruled out
+`expo-crypto` and led to implementing SHA-256 in the repository — see ADR-0004.
+Making these members asynchronous would be a breaking change to a stable
+contract and would ripple through reconstruction, the manifest manager and every
+caller that treats verification as a step rather than an await.
 
 ## 2.5 `PacketCodec`
 
@@ -261,6 +268,41 @@ Not covered by the §4 procedure. Listed so the distinction is explicit.
 fails loudly rather than returning a stub that silently loses data.
 
 ---
+
+---
+
+# 3.1 Provisional contracts
+
+A contract that has been declared but not yet proven by a production
+implementation is **provisional**: it may change without an ADR until something
+real implements it. Listing it here is what stops it being treated as frozen by
+accident.
+
+## `PayloadCipher`
+
+| | |
+| --- | --- |
+| **Purpose** | The seam to whatever provides confidentiality (§19). |
+| **Declared in** | `src/core/contracts/payloadCipher.ts` |
+| **Owner** | Core protocol |
+| **Implementations** | `createDisabledCipher` and `createUnsupportedCipher` only. **No cipher implements it.** |
+| **Stability** | **Provisional** |
+
+**Why it is not stable.** Its shape is a prediction about an algorithm nobody
+has written. It assumes a cipher operates on a whole file stream synchronously,
+which follows from §19.3's pipeline and §19.11's "reconstruction of the
+encrypted binary stream" — but an AEAD implementation using a platform keystore
+would very likely be asynchronous, and a streaming cipher would want a different
+shape entirely. Freezing a contract that has never carried a real implementation
+would be freezing a guess.
+
+**What is already load-bearing.** The seam's *placement* is not provisional:
+encryption happens after compression and before packetization, decryption after
+reassembly and before integrity verification (§19.16.1, §19.16.2, §19.16.9).
+Those positions are enforced by where the calls sit in `TransferService` and
+`ReceiveService`, and they hold whatever the cipher's eventual shape.
+
+**It becomes stable when** SI-012 is resolved and a real cipher exists.
 
 # 4. Breaking-Change Procedure
 
