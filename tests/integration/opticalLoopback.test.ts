@@ -298,3 +298,117 @@ describe('a whole file through the loop', () => {
     });
   });
 });
+
+describe('tracked decoding — the receiver keeps up (§12)', () => {
+  /*
+   * Locating a symbol is most of a decode's cost, and it scales with the
+   * pixels searched. Once a code has been found, searching the whole frame for
+   * it again is work whose answer is known. These pin the behaviour that makes
+   * the crop safe rather than the speed it buys, because a fast receiver that
+   * loses a code is worse than a slow one that does not.
+   */
+
+  /**
+   * A capture of fixed size with the code placed at `offset`.
+   *
+   * The frame size stays constant and the code moves inside it, which is what
+   * a handheld receiver actually produces. The surround is mid-grey rather
+   * than white: a capture that is overwhelmingly white is rejected by the §12
+   * exposure filter before any of this is reached, which would make these
+   * tests pass or fail for the wrong reason.
+   */
+  function insetCapture(bytes: Uint8Array, offset: number, timestamp: number): CameraFrame {
+    const raster = rasterizeFrame(encoder.encode(bytes), 3);
+    const width = raster.width + 200;
+    const height = raster.height + 200;
+    const data = new Uint8ClampedArray(width * height * 4).fill(128);
+
+    for (let index = 3; index < data.length; index += 4) {
+      data[index] = 255;
+    }
+
+    for (let row = 0; row < raster.height; row += 1) {
+      const from = row * raster.width * 4;
+      const to = ((row + offset) * width + offset) * 4;
+      data.set(raster.data.subarray(from, from + raster.width * 4), to);
+    }
+
+    return { width, height, format: PixelFormat.Rgba, data, timestamp };
+  }
+
+  it('decodes the same code repeatedly once it has been located', () => {
+    const tracking = createQrDecoder();
+    const sent = Uint8Array.from({ length: 120 }, (_unused, i) => i & 0xff);
+
+    for (let frame = 0; frame < 3; frame += 1) {
+      const result = tracking.decode(insetCapture(sent, 40, 1000 + frame * 100));
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(Array.from(result.payload)).toEqual(Array.from(sent));
+      }
+    }
+  });
+
+  it('reports positions in frame coordinates, not crop coordinates', () => {
+    // Everything above the decoder describes positions in the frame it handed
+    // over. A crop's own coordinates leaking out would put the symbol tens of
+    // pixels from where it is.
+    const tracking = createQrDecoder();
+    const sent = Uint8Array.from([1, 2, 3, 4]);
+    const offset = 40;
+
+    const first = tracking.decode(insetCapture(sent, offset, 1000));
+    const second = tracking.decode(insetCapture(sent, offset, 1100));
+
+    expect(first.ok && second.ok).toBe(true);
+    if (first.ok && second.ok) {
+      expect(second.location.topLeft.x).toBeCloseTo(first.location.topLeft.x, 0);
+      expect(second.location.topLeft.y).toBeCloseTo(first.location.topLeft.y, 0);
+      expect(second.location.topLeft.x).toBeGreaterThanOrEqual(offset - 1);
+    }
+  });
+
+  it('finds a code that moved, rather than aiming where it was', () => {
+    // The crop must not be able to trap the decoder at a stale position.
+    const tracking = createQrDecoder();
+    const sent = Uint8Array.from([9, 8, 7, 6]);
+
+    expect(tracking.decode(insetCapture(sent, 10, 1000)).ok).toBe(true);
+
+    const moved = tracking.decode(insetCapture(sent, 150, 1100));
+
+    expect(moved.ok).toBe(true);
+    if (moved.ok) {
+      // Found at the new position, so the stale crop did not trap it.
+      expect(moved.location.topLeft.x).toBeGreaterThan(100);
+    }
+  });
+
+  it('forgets a position that has stopped producing decodes', () => {
+    // A stale anchor costs a crop on every frame and suppresses the full scan
+    // that would find the code again.
+    const tracking = createQrDecoder({ trackTtlMs: 50 });
+    const sent = Uint8Array.from([4, 5, 6]);
+
+    expect(tracking.decode(insetCapture(sent, 30, 1000)).ok).toBe(true);
+    // Well past the TTL: this must go through a full scan and still succeed.
+    expect(tracking.decode(insetCapture(sent, 30, 9000)).ok).toBe(true);
+  });
+
+  it('decodes identically with tracking disabled', () => {
+    // Tracking is an optimisation. It may not change what comes out.
+    const sent = Uint8Array.from({ length: 200 }, (_unused, i) => (i * 7) & 0xff);
+    const plain = createQrDecoder({ trackSymbols: false });
+    const tracking = createQrDecoder();
+
+    const a = plain.decode(insetCapture(sent, 25, 1000));
+    tracking.decode(insetCapture(sent, 25, 1000));
+    const b = tracking.decode(insetCapture(sent, 25, 1050));
+
+    expect(a.ok && b.ok).toBe(true);
+    if (a.ok && b.ok) {
+      expect(Array.from(b.payload)).toEqual(Array.from(a.payload));
+    }
+  });
+});

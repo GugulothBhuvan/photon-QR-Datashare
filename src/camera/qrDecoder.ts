@@ -23,7 +23,13 @@ import jsQR from 'jsqr';
 import { AppError, ErrorCode } from '@core/errors';
 
 import { isWellFormed, type CameraFrame } from './cameraPort';
-import { isPlausiblyDecodable, toRgba } from './frameProcessor';
+import {
+  clampRegion,
+  crop,
+  isPlausiblyDecodable,
+  toRgba,
+  type FrameRegion,
+} from './frameProcessor';
 
 /** Why a frame produced no payload. */
 export const DecodeFailure = {
@@ -77,6 +83,35 @@ export interface QrDecoderOptions {
    * usable ones, and the check is orders of magnitude cheaper than a decode.
    */
   readonly skipPoorExposure?: boolean;
+  /**
+   * Whether to decode from a crop around the last symbol's position.
+   *
+   * On by default, and it is the difference between a receiver that keeps up
+   * with a sender and one that does not. A decoder spends most of its time
+   * *locating* a symbol, and that cost scales with the pixels it searches. Once
+   * a code has been found, searching the whole frame for it again is work with
+   * a known answer — a crop is a twentieth of the pixels for the same result.
+   *
+   * Correctness does not depend on it: a crop that misses falls straight
+   * through to a full scan on the same frame, so a code that moves, or a
+   * second code appearing elsewhere, is found on the next frame at the latest.
+   */
+  readonly trackSymbols?: boolean;
+  /**
+   * How long a tracked position is trusted, in frame-timestamp milliseconds.
+   *
+   * A stale position is worse than none: it aims every crop at where a code
+   * used to be, and the full scans that would find it again never run. Short
+   * enough that a moved phone re-acquires quickly.
+   */
+  readonly trackTtlMs?: number;
+  /**
+   * Padding around a tracked symbol, as a fraction of its size.
+   *
+   * The crop has to lead a handheld receiver rather than chase it, and a code
+   * clipped by its own crop decodes no better than one that is absent.
+   */
+  readonly trackPadding?: number;
 }
 
 export interface QrDecoder {
@@ -92,6 +127,86 @@ export interface QrDecoder {
 /** Creates a QR decoder. */
 export function createQrDecoder(options: QrDecoderOptions = {}): QrDecoder {
   const skipPoorExposure = options.skipPoorExposure ?? true;
+  const trackSymbols = options.trackSymbols ?? true;
+  const trackTtlMs = options.trackTtlMs ?? 1_500;
+  const trackPadding = options.trackPadding ?? 0.4;
+
+  /** Where the last symbol was, and when — the crop path's anchor. */
+  let tracked: { region: FrameRegion; at: number } | undefined;
+
+  /** The axis-aligned box a located symbol occupies, padded to lead movement. */
+  function paddedRegion(location: SymbolLocation): FrameRegion {
+    const xs = [
+      location.topLeft.x,
+      location.topRight.x,
+      location.bottomLeft.x,
+      location.bottomRight.x,
+    ];
+    const ys = [
+      location.topLeft.y,
+      location.topRight.y,
+      location.bottomLeft.y,
+      location.bottomRight.y,
+    ];
+
+    const left = Math.min(...xs);
+    const top = Math.min(...ys);
+    const width = Math.max(...xs) - left;
+    const height = Math.max(...ys) - top;
+
+    return {
+      x: left - width * trackPadding,
+      y: top - height * trackPadding,
+      width: width * (1 + trackPadding * 2),
+      height: height * (1 + trackPadding * 2),
+    };
+  }
+
+  /** Moves a location from crop coordinates back into frame coordinates. */
+  function shift(location: SymbolLocation, dx: number, dy: number): SymbolLocation {
+    const move = (point: { readonly x: number; readonly y: number }) => ({
+      x: point.x + dx,
+      y: point.y + dy,
+    });
+
+    return Object.freeze({
+      topLeft: move(location.topLeft),
+      topRight: move(location.topRight),
+      bottomLeft: move(location.bottomLeft),
+      bottomRight: move(location.bottomRight),
+    });
+  }
+
+  /** One jsQR pass over a frame or a crop of one. */
+  function scan(target: CameraFrame): { binaryData: unknown; location: SymbolLocation } | null {
+    const rgba = toRgba(target);
+
+    try {
+      // The library locates the symbol, corrects perspective and resolves
+      // error correction — §14's four requirements — or returns null.
+      const result = jsQR(rgba.data, rgba.width, rgba.height);
+
+      if (result === null) {
+        return null;
+      }
+
+      return {
+        binaryData: result.binaryData,
+        location: Object.freeze({
+          topLeft: result.location.topLeftCorner,
+          topRight: result.location.topRightCorner,
+          bottomLeft: result.location.bottomLeftCorner,
+          bottomRight: result.location.bottomRightCorner,
+        }),
+      };
+    } catch (error: unknown) {
+      // A library failure becomes a standardized error rather than an SDK
+      // exception crossing the boundary (docs/API_SPEC.md §12).
+      throw AppError.wrap(error, ErrorCode.CAMERA_ERROR, {
+        details: { width: target.width, height: target.height },
+      });
+    }
+  }
 
   return {
     decode(frame) {
@@ -103,22 +218,38 @@ export function createQrDecoder(options: QrDecoderOptions = {}): QrDecoder {
         return { ok: false, reason: DecodeFailure.PoorExposure };
       }
 
-      const rgba = toRgba(frame);
-      let found;
+      let found: { binaryData: unknown; location: SymbolLocation } | null = null;
 
-      try {
-        // The library locates the symbol, corrects perspective and resolves
-        // error correction — §14's four requirements — or returns null.
-        found = jsQR(rgba.data, rgba.width, rgba.height);
-      } catch (error: unknown) {
-        // A library failure becomes a standardized error rather than an SDK
-        // exception crossing the boundary (docs/API_SPEC.md §12).
-        throw AppError.wrap(error, ErrorCode.CAMERA_ERROR, {
-          details: { width: frame.width, height: frame.height },
-        });
+      // **The crop first.** Locating a symbol is most of a decode's cost, and
+      // that cost scales with pixels searched. A code already found sits in a
+      // small part of the frame, so searching the whole frame for it again is
+      // work whose answer is known.
+      const anchor =
+        trackSymbols && tracked !== undefined && frame.timestamp - tracked.at <= trackTtlMs
+          ? tracked.region
+          : undefined;
+
+      if (anchor !== undefined) {
+        const box = clampRegion(frame, anchor);
+        const hit = scan(crop(frame, box));
+
+        if (hit !== null) {
+          // Back into frame coordinates: everything above this layer describes
+          // positions in the frame it was handed, not in a crop it never saw.
+          found = { binaryData: hit.binaryData, location: shift(hit.location, box.x, box.y) };
+        }
       }
 
+      // A crop that misses falls through to the whole frame on the same frame,
+      // so nothing is delayed by tracking — a code that moved, or a second one
+      // elsewhere, is found now rather than next time.
+      found ??= scan(frame);
+
       if (found === null) {
+        // The position is no longer producing decodes. Dropping it now means
+        // the next frame pays for a full scan instead of aiming at a code that
+        // has gone.
+        tracked = undefined;
         return { ok: false, reason: DecodeFailure.NoSymbol };
       }
 
@@ -128,17 +259,16 @@ export function createQrDecoder(options: QrDecoderOptions = {}): QrDecoder {
         return { ok: false, reason: DecodeFailure.UnreadableSymbol };
       }
 
+      if (trackSymbols) {
+        tracked = { region: paddedRegion(found.location), at: frame.timestamp };
+      }
+
       return {
         ok: true,
         // §14: forwarded unchanged. The only transformation is from the
         // library's number array into the byte array the packet layer expects.
         payload: Uint8Array.from(found.binaryData),
-        location: Object.freeze({
-          topLeft: found.location.topLeftCorner,
-          topRight: found.location.topRightCorner,
-          bottomLeft: found.location.bottomLeftCorner,
-          bottomRight: found.location.bottomRightCorner,
-        }),
+        location: found.location,
         timestamp: frame.timestamp,
       };
     },

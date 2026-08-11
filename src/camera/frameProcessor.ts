@@ -176,6 +176,68 @@ export function downsample(frame: CameraFrame, factor: number): CameraFrame {
   });
 }
 
+/** A rectangle within a frame, in frame pixels. */
+export interface FrameRegion {
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+}
+
+/**
+ * Fits a region inside a frame.
+ *
+ * Exported because a caller that crops usually also needs to know *where* the
+ * crop landed — a position found inside it means nothing until it is moved
+ * back into the coordinates of the frame the caller started with.
+ */
+export function clampRegion(frame: CameraFrame, region: FrameRegion): FrameRegion {
+  const x = Math.max(0, Math.min(frame.width - 1, Math.floor(region.x)));
+  const y = Math.max(0, Math.min(frame.height - 1, Math.floor(region.y)));
+
+  return {
+    x,
+    y,
+    width: Math.max(1, Math.min(frame.width - x, Math.floor(region.width))),
+    height: Math.max(1, Math.min(frame.height - y, Math.floor(region.height))),
+  };
+}
+
+/**
+ * Copies one rectangle out of a frame.
+ *
+ * The receiver's throughput depends on this more than on anything else. A QR
+ * decoder spends most of its time *locating* a symbol, and that cost scales
+ * with the pixels it searches — a full 960x720 frame is 691,200 of them, and a
+ * code that has already been found sits in perhaps a twentieth of that. Once a
+ * symbol's position is known, searching the whole frame again for it is work
+ * with a known answer.
+ *
+ * The region is clamped to the frame, so a caller may pad a box generously
+ * without checking whether the padding fits.
+ */
+export function crop(frame: CameraFrame, region: FrameRegion): CameraFrame {
+  assertWellFormed(frame);
+
+  const stride = bytesPerPixel(frame.format);
+  const { x: left, y: top, width, height } = clampRegion(frame, region);
+
+  const out = new Uint8ClampedArray(width * height * stride);
+
+  for (let row = 0; row < height; row += 1) {
+    const from = ((top + row) * frame.width + left) * stride;
+    out.set(frame.data.subarray(from, from + width * stride), row * width * stride);
+  }
+
+  return Object.freeze({
+    width,
+    height,
+    format: frame.format,
+    data: out,
+    timestamp: frame.timestamp,
+  });
+}
+
 /**
  * Mean luminance of a grayscale frame, 0–255.
  *
@@ -206,6 +268,61 @@ export const MAX_USABLE_LUMINANCE = 240;
  * while the camera was covered or pointed at a light.
  */
 export function isPlausiblyDecodable(frame: CameraFrame): boolean {
-  const mean = meanLuminance(frame);
+  const mean = sampledLuminance(frame);
   return mean >= MIN_USABLE_LUMINANCE && mean <= MAX_USABLE_LUMINANCE;
+}
+
+/**
+ * Pixels to skip between luminance samples.
+ *
+ * The check this feeds decides whether a decode is worth *attempting*. It is
+ * an estimate by nature — no threshold on average brightness is exact — so
+ * reading every pixel bought precision the answer does not use.
+ *
+ * It cost a great deal. `meanLuminance` converts the whole frame to grayscale
+ * first, which on a 960x720 capture is a 691 KB allocation and 691,200 BT.601
+ * conversions, followed by a second pass to sum them — all before a decode is
+ * even attempted, on every frame, on the thread that also renders the
+ * interface. Sixteen brings that to a few thousand reads and no allocation,
+ * and the mean of a uniform sample over half a million pixels is not
+ * meaningfully different from the mean of all of them.
+ */
+const LUMINANCE_SAMPLE_STEP = 16;
+
+/**
+ * Estimated mean luminance, sampled rather than exhaustive.
+ *
+ * Distinct from `meanLuminance`, which stays exact: that is a measurement
+ * other code may reason about, and this is a fast screen for a hot loop.
+ */
+export function sampledLuminance(frame: CameraFrame): number {
+  const stride = bytesPerPixel(frame.format);
+  const pixels = frame.width * frame.height;
+
+  if (pixels === 0) {
+    return 0;
+  }
+
+  const step = Math.max(1, Math.min(LUMINANCE_SAMPLE_STEP, Math.floor(pixels / 64) || 1));
+  let total = 0;
+  let count = 0;
+
+  for (let pixel = 0; pixel < pixels; pixel += step) {
+    const offset = pixel * stride;
+
+    if (stride === 1) {
+      total += frame.data[offset] as number;
+    } else {
+      // The same BT.601 weighting `toGrayscale` uses, applied in place rather
+      // than to a converted copy of the frame.
+      total +=
+        0.299 * (frame.data[offset] as number) +
+        0.587 * (frame.data[offset + 1] as number) +
+        0.114 * (frame.data[offset + 2] as number);
+    }
+
+    count += 1;
+  }
+
+  return count === 0 ? 0 : total / count;
 }
