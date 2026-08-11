@@ -49,4 +49,17 @@ module.exports = {
   coverageDirectory: '<rootDir>/coverage',
   clearMocks: true,
   restoreMocks: true,
+
+  /**
+   * TEST_SPEC §13: test automation SHALL remain deterministic.
+   *
+   * Jest's five-second default is not a deterministic budget — it is a
+   * wall-clock one. Rendering a screen under coverage instrumentation costs
+   * several times what it costs uninstrumented, so `npm test` and
+   * `npm run test:ci` disagreed about whether a screen test passed. The tests
+   * themselves are deterministic; the budget was not generous enough to say so
+   * in both modes. Raised so a slow machine or an instrumented run reports the
+   * same result as a fast one, while a genuinely hung test still fails.
+   */
+  testTimeout: 30_000,
 };

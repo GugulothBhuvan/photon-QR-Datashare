@@ -277,13 +277,19 @@ export function createSendController(options: SendControllerOptions): SendContro
     },
 
     start() {
-      const { sessionId } = state.getState();
+      const { sessionId, stage } = state.getState();
 
       if (sessionId === undefined || preparedTransfer === undefined) {
         return;
       }
 
-      if (transfers.begin(sessionId)) {
+      // Resuming and beginning are different transitions. §5.4's one button
+      // does both, so the controller decides which — a paused session is past
+      // Waiting and Handshake, and asking it for them would fail.
+      const started =
+        stage === SendStage.Paused ? transfers.resume(sessionId) : transfers.begin(sessionId);
+
+      if (started) {
         state.setState((previous) => ({
           ...previous,
           stage: SendStage.Sending,

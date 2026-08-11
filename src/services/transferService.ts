@@ -86,6 +86,16 @@ export interface TransferService {
   /** Moves a prepared session into transmission (§8.8). */
   begin(id: SessionId): boolean;
 
+  /**
+   * Returns a paused session to transmission (§26.4).
+   *
+   * Distinct from `begin`, which walks a *newly prepared* session up from
+   * Waiting. A paused session is already past those states, so `begin` would
+   * ask it for a transition the FSM rightly refuses — §26.4 permits
+   * `Paused → Active` directly, and that is what resuming means.
+   */
+  resume(id: SessionId): boolean;
+
   /** Pauses transmission, preserving everything (§14.5, §14.6). */
   pause(id: SessionId): boolean;
 
@@ -195,6 +205,12 @@ export function createTransferService(options: TransferServiceOptions): Transfer
         }
       }
       return true;
+    },
+
+    resume(id) {
+      // §8.8: previously validated packets are preserved, so nothing is
+      // rebuilt — the session simply becomes active again.
+      return sessions.transition(id, SessionState.Active).ok;
     },
 
     pause(id) {

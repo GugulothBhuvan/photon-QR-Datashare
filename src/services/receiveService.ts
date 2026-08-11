@@ -198,13 +198,17 @@ export function createReceiveService(options: ReceiveServiceOptions): ReceiveSer
           return;
         }
 
-        const outcome = consume(frame);
+        consume(frame);
 
-        // Only report when something changed, so a screen is not re-rendered
-        // for every frame that contained nothing.
-        if (outcome !== FrameOutcome.NoPacket) {
-          onProgress?.(progress());
-        }
+        // Reported for **every** frame, including those that yielded nothing.
+        //
+        // An earlier version reported only when a packet was stored or
+        // rejected, to save re-renders. That made §5.3's frame counters wrong
+        // in the one situation they exist for: a receiver pointed at a code it
+        // cannot read saw "0 frames" and could not tell that from a camera
+        // pointed at a wall. A counter that only moves when something else
+        // moved is not a counter.
+        onProgress?.(progress());
       });
 
       return {
