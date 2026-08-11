@@ -13,10 +13,10 @@
  * **Why bytes survive (§14).** The receive path has no text anywhere in it:
  *
  * ```text
- * VisionCamera Frame (RGB)
- *   → frame.getPixelBuffer(): ArrayBuffer      ← raw pixel bytes
+ * VisionCamera Frame (YUV)
+ *   → getPlanes()[0].getPixelBuffer()          ← the luminance plane
  *   → Uint8ClampedArray                        ← no copy through a string
- *   → CameraFrame                              ← the frozen contract
+ *   → CameraFrame (Grayscale)                  ← the frozen contract
  *   → jsQR → payload bytes → deserializePacket → CRC
  * ```
  *
@@ -216,6 +216,53 @@ export function toCameraFrame(
   }
 
   return { width, height, format: PixelFormat.Rgba, data: packed, timestamp };
+}
+
+/**
+ * Converts a luminance plane into the contract's `CameraFrame`.
+ *
+ * The Y plane of a YUV frame **is** luminance, at full resolution, which is
+ * exactly what a QR decoder wants — the symbol is black and white, and colour
+ * carries nothing. `PixelFormat.Grayscale` has been in the frozen port since
+ * it was written for precisely this.
+ *
+ * Preferred over RGB now, for a reason found on hardware: YUV is what camera
+ * pipelines produce natively, so it is always available, while `'rgb'` asks
+ * for a conversion a device may decline. A declined conversion leaves the
+ * preview working and the frame output silent, which is indistinguishable
+ * from a broken receiver. It is also a quarter of the bytes to copy across
+ * the thread boundary.
+ *
+ * @param bytesPerRow Row stride of the plane. Padding is common and must be
+ *   dropped, or every row after the first is offset.
+ */
+export function toGrayscaleFrame(
+  buffer: ArrayBuffer,
+  width: number,
+  height: number,
+  timestamp: number,
+  bytesPerRow: number,
+): CameraFrame {
+  const source = new Uint8ClampedArray(buffer);
+
+  if (bytesPerRow === width && source.length >= width * height) {
+    return {
+      width,
+      height,
+      format: PixelFormat.Grayscale,
+      data: source.subarray(0, width * height),
+      timestamp,
+    };
+  }
+
+  const packed = new Uint8ClampedArray(width * height);
+
+  for (let row = 0; row < height; row += 1) {
+    const start = row * bytesPerRow;
+    packed.set(source.subarray(start, start + width), row * width);
+  }
+
+  return { width, height, format: PixelFormat.Grayscale, data: packed, timestamp };
 }
 
 /**

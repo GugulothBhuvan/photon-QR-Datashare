@@ -11,7 +11,12 @@
  * by a few bytes, which still looks like an image and never decodes.
  */
 import { CameraPermission, PixelFormat, isWellFormed } from '@camera/cameraPort';
-import { createDeviceCamera, sourceBytesPerPixelFor, toCameraFrame } from '@camera/deviceCamera';
+import {
+  createDeviceCamera,
+  sourceBytesPerPixelFor,
+  toCameraFrame,
+  toGrayscaleFrame,
+} from '@camera/deviceCamera';
 
 /** A buffer whose bytes encode their own position, so misalignment is visible. */
 function buffer(byteLength: number, fill: (index: number) => number): ArrayBuffer {
@@ -116,6 +121,64 @@ describe('toCameraFrame — raw payload preservation (§14)', () => {
     expect(Array.from(frame.data)).toEqual([
       1, 2, 3, 255, 4, 5, 6, 255, 7, 8, 9, 255, 10, 11, 12, 255,
     ]);
+  });
+});
+
+describe('toGrayscaleFrame — the luminance plane (§12, §14)', () => {
+  it('passes an unpadded plane through as grayscale', () => {
+    // The Y plane of a YUV frame is luminance already. A QR symbol is black on
+    // white, so this is the whole of what a decoder reads.
+    const width = 4;
+    const height = 3;
+    const frame = toGrayscaleFrame(
+      buffer(width * height, (index) => index & 0xff),
+      width,
+      height,
+      99,
+      width,
+    );
+
+    expect(frame.format).toBe(PixelFormat.Grayscale);
+    expect(frame.timestamp).toBe(99);
+    expect(isWellFormed(frame)).toBe(true);
+    expect(Array.from(frame.data)).toEqual(
+      Array.from({ length: width * height }, (_unused, index) => index & 0xff),
+    );
+  });
+
+  it('drops row padding, which cameras almost always add', () => {
+    // A padded stride kept would offset every row after the first, and the
+    // image would still look like an image while decoding nothing.
+    const width = 2;
+    const height = 3;
+    const paddedRow = width + 6;
+
+    const frame = toGrayscaleFrame(
+      buffer(paddedRow * height, (index) =>
+        index % paddedRow < width ? Math.floor(index / paddedRow) + 1 : 0xee,
+      ),
+      width,
+      height,
+      0,
+      paddedRow,
+    );
+
+    expect(frame.data).toHaveLength(width * height);
+    expect(Array.from(frame.data)).not.toContain(0xee);
+    expect(Array.from(frame.data)).toEqual([1, 1, 2, 2, 3, 3]);
+  });
+
+  it('ignores trailing bytes beyond the declared image', () => {
+    const frame = toGrayscaleFrame(
+      buffer(4 * 4 + 32, () => 5),
+      4,
+      4,
+      0,
+      4,
+    );
+
+    expect(frame.data).toHaveLength(16);
+    expect(isWellFormed(frame)).toBe(true);
   });
 });
 

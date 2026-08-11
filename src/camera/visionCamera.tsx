@@ -29,7 +29,12 @@ import 'react-native-vision-camera-worklets';
 import { scheduleOnRN } from 'react-native-worklets';
 
 import { CameraPermission } from './cameraPort';
-import { sourceBytesPerPixelFor, toCameraFrame, type DeviceCamera } from './deviceCamera';
+import {
+  sourceBytesPerPixelFor,
+  toCameraFrame,
+  toGrayscaleFrame,
+  type DeviceCamera,
+} from './deviceCamera';
 
 export interface CameraSourceProps {
   /** The adapter this component feeds. */
@@ -133,6 +138,22 @@ function CameraSourceImpl({
   );
 
   /**
+   * Hands one luminance plane to the JavaScript thread.
+   *
+   * The Y plane of a YUV frame is exactly what a QR decoder needs, so nothing
+   * is lost by not carrying colour, and a quarter of the bytes cross the
+   * thread boundary.
+   */
+  const deliverLuminance = useCallback(
+    (pixels: Uint8Array, width: number, height: number, bytesPerRow: number): void => {
+      camera.deliver(
+        toGrayscaleFrame(pixels.buffer as ArrayBuffer, width, height, Date.now(), bytesPerRow),
+      );
+    },
+    [camera],
+  );
+
+  /**
    * **Memoized, and the receiver does not work without it.**
    *
    * `useFrameOutput` builds the frame output inside a `useMemo` keyed on this
@@ -159,7 +180,40 @@ function CameraSourceImpl({
       'worklet';
 
       try {
-        if (!frame.isValid || !frame.hasPixelBuffer) {
+        if (!frame.isValid) {
+          return;
+        }
+
+        // **Planar frames come through their planes, not the pixel buffer.**
+        // VisionCamera documents `getPixelBuffer()` as *undefined behaviour*
+        // for a planar frame, and `hasPixelBuffer` is false for one — so the
+        // old guard discarded every frame a device chose to deliver as YUV,
+        // silently, while the preview carried on working. That is
+        // indistinguishable from a broken receiver, and it is why `'yuv'` is
+        // now requested: it is the format cameras produce natively, so it is
+        // always available, where `'rgb'` asks for a conversion a device may
+        // decline.
+        if (frame.isPlanar) {
+          const planes = frame.getPlanes();
+          const luminance = planes[0];
+
+          if (luminance === undefined) {
+            return;
+          }
+
+          const plane = new Uint8Array(luminance.getPixelBuffer()).slice();
+
+          scheduleOnRN(
+            deliverLuminance,
+            plane,
+            luminance.width,
+            luminance.height,
+            luminance.bytesPerRow,
+          );
+          return;
+        }
+
+        if (!frame.hasPixelBuffer) {
           return;
         }
 
@@ -186,14 +240,18 @@ function CameraSourceImpl({
         frame.dispose();
       }
     },
-    [deliverFrame],
+    [deliverFrame, deliverLuminance],
   );
 
   const frameOutput = useFrameOutput({
     // §14 needs pixels, and RGB is what `jsQR` reads. YUV would be cheaper on
     // the camera pipeline but would need a colour conversion here, which is
     // the kind of extra step that quietly corrupts a decode.
-    pixelFormat: 'rgb',
+    // **YUV, not RGB.** The Y plane is luminance at full resolution, which is
+    // all a QR decoder reads — the symbol is black on white and colour carries
+    // nothing. YUV is also what the pipeline produces natively, so no device
+    // can decline it, and it is 2.6x less bandwidth than RGB.
+    pixelFormat: 'yuv',
     targetResolution,
     // §12 asks the receiver to decode as quickly as practical, and a backlog of
     // stale frames helps nobody: a QR frame that has already been replaced on
@@ -205,6 +263,13 @@ function CameraSourceImpl({
     // mutable state in a worklet that cannot hold any.
     dropFramesWhileBusy: true,
     onFrame,
+
+    // Reported rather than left to VisionCamera's default console warning. A
+    // receiver dropping every frame and a receiver receiving none look the
+    // same from outside, and they need opposite fixes.
+    onFrameDropped: (reason) => {
+      onError?.(`frames dropped: ${reason}`);
+    },
   });
 
   // Same rule: a new array is a new `outputs` identity, and `<Camera>` treats

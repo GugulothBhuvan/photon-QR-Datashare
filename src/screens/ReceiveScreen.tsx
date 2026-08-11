@@ -11,7 +11,7 @@
  * Under Node and on the web there is no camera, and the placeholder says so
  * rather than pretending to be one.
  */
-import { useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import {
@@ -124,6 +124,34 @@ export function ReceiveScreen({
     </Card>
   );
 
+  /**
+   * Whether a code was read in the last moment.
+   *
+   * Drives the corner brackets, so the lock means something: it lights when
+   * symbols are actually being decoded and goes out when they stop. A static
+   * frame that always looked the same told a user nothing about whether their
+   * aim was working.
+   */
+  const [locked, setLocked] = useState(false);
+  const lastDecoded = useRef(state.framesDecoded);
+
+  useEffect(() => {
+    if (state.framesDecoded === lastDecoded.current) {
+      return;
+    }
+
+    lastDecoded.current = state.framesDecoded;
+    setLocked(true);
+
+    // Long enough to be seen at any frame rate, short enough that the light
+    // goes out promptly when the code leaves the view.
+    const timer = setTimeout(() => setLocked(false), 600);
+
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [state.framesDecoded]);
+
   // §11 applies to a receiver too. A phone held still and pointed at another
   // screen is exactly what the system reads as idle, and a receiver that
   // sleeps mid-transfer loses everything collected so far.
@@ -226,7 +254,25 @@ export function ReceiveScreen({
           the layer boundary forbids a screen reaching into `@camera` (ADR-0005).
         */}
         {CameraPreview === undefined ? null : <CameraPreview />}
-        <View style={[styles.overlay, { borderColor: colors.primary }]} />
+        {/*
+          Four corner brackets rather than a rectangle. A QR symbol is square,
+          so a square target is what a user should be filling; the old overlay
+          inherited the preview's shape and asked them to aim a rectangle at a
+          square. The brackets brighten while codes are being read, which is
+          the only aiming feedback the receiver can honestly give.
+        */}
+        <View style={styles.reticle} pointerEvents="none">
+          {CORNERS.map((corner) => (
+            <View
+              key={corner.key}
+              style={[
+                styles.corner,
+                corner.style,
+                { borderColor: locked ? colors.success : colors.border },
+              ]}
+            />
+          ))}
+        </View>
         <Text variant="caption" tone="muted" style={styles.previewText}>
           {CameraPreview === undefined
             ? 'Camera preview unavailable on this platform'
@@ -370,25 +416,69 @@ function Stat({ label, value }: { readonly label: string; readonly value: string
  */
 const NO_SIGNAL_FRAMES = 150;
 
+/** Arm length of each corner bracket, in points. */
+const CORNER_LENGTH = 28;
+
+/** Thickness of the two borders that form each bracket. */
+const CORNER_WEIGHT = 3;
+
+/**
+ * The four brackets that mark the scan target.
+ *
+ * Each is a box showing only the two borders that meet at its corner, which
+ * draws an L without any path work.
+ */
+const CORNERS = [
+  {
+    key: 'tl',
+    style: { borderLeftWidth: CORNER_WEIGHT, borderTopWidth: CORNER_WEIGHT, left: 0, top: 0 },
+  },
+  {
+    key: 'tr',
+    style: { borderRightWidth: CORNER_WEIGHT, borderTopWidth: CORNER_WEIGHT, right: 0, top: 0 },
+  },
+  {
+    key: 'bl',
+    style: { borderBottomWidth: CORNER_WEIGHT, borderLeftWidth: CORNER_WEIGHT, bottom: 0, left: 0 },
+  },
+  {
+    key: 'br',
+    style: {
+      borderBottomWidth: CORNER_WEIGHT,
+      borderRightWidth: CORNER_WEIGHT,
+      bottom: 0,
+      right: 0,
+    },
+  },
+] as const;
+
 const styles = StyleSheet.create({
   hint: {
     gap: Spacing.xs,
     marginTop: Spacing.sm,
   },
-  overlay: {
-    borderRadius: Radius.md,
-    borderWidth: 2,
-    height: '70%',
+  corner: {
+    borderColor: 'transparent',
+    height: CORNER_LENGTH,
     position: 'absolute',
-    width: '70%',
+    width: CORNER_LENGTH,
   },
   preview: {
     alignItems: 'center',
+    // Square, because a QR symbol is. A rectangular preview asks a user to
+    // fill a rectangle with a square and leaves them guessing how close is
+    // close enough.
+    aspectRatio: 1,
     borderRadius: Radius.md,
     borderWidth: StyleSheet.hairlineWidth,
-    flex: 1,
     justifyContent: 'center',
-    minHeight: 220,
+    overflow: 'hidden',
+    width: '100%',
+  },
+  reticle: {
+    aspectRatio: 1,
+    position: 'absolute',
+    width: '72%',
   },
   previewText: {
     bottom: Spacing.md,
