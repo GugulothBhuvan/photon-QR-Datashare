@@ -12,10 +12,11 @@
  * that only a device can exercise. Recorded as an exemption in
  * `tests/system/invariants.test.ts` rather than left as a silent gap.
  */
-import { memo, useCallback, useEffect, useMemo } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { StyleSheet } from 'react-native';
 import {
   Camera,
+  type CameraRef,
   useCameraDevice,
   useCameraPermission,
   useFrameOutput,
@@ -217,17 +218,61 @@ function CameraSourceImpl({
     [onError],
   );
 
+  const cameraRef = useRef<CameraRef>(null);
+
+  /** Measured so the focus point is the middle of what is on screen. */
+  const previewSize = useRef({ width: 0, height: 0 });
+
+  /**
+   * Focuses the centre of the frame, continuously (QR_SPEC §12).
+   *
+   * §12 asks the receiver to "maintain autofocus", which was never
+   * implemented. A phone held up to another phone's screen is close enough
+   * that focus matters, and a lens hunting between the screen and the room
+   * behind it produces a stream of frames too soft for any decoder — the
+   * failure looks exactly like a camera delivering nothing useful.
+   *
+   * `adaptiveness: 'continuous'` keeps tracking after the first settle rather
+   * than locking, and `'steady'` avoids the visible pumping a snappy refocus
+   * causes on a subject that is not moving.
+   */
+  const focusCentre = useCallback((): void => {
+    const camera = cameraRef.current;
+
+    if (camera === null) {
+      return;
+    }
+
+    void camera
+      .focusTo(
+        { x: previewSize.current.width / 2, y: previewSize.current.height / 2 },
+        { responsiveness: 'steady', adaptiveness: 'continuous', modes: ['AF', 'AE'] },
+      )
+      .catch(() => {
+        // A device without focus or exposure metering refuses. §12 says
+        // SHOULD, and a fixed-focus camera can still read a code.
+      });
+  }, []);
+
   if (device === undefined) {
     return null;
   }
 
   return (
     <Camera
+      ref={cameraRef}
       style={StyleSheet.absoluteFill}
       device={device}
       isActive={isActive}
       outputs={outputs}
       onError={reportError}
+      onStarted={focusCentre}
+      onLayout={(event) => {
+        previewSize.current = event.nativeEvent.layout;
+      }}
+      // §12 again, by hand: a user who can see the preview is soft has an
+      // immediate way to fix it, which no automatic policy can guarantee.
+      enableNativeTapToFocusGesture
     />
   );
 }

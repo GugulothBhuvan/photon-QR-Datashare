@@ -9,7 +9,8 @@
  * after capability negotiation, and neither is implemented — a toggle that
  * silently did nothing would be worse than one that explains itself.
  */
-import { StyleSheet, useWindowDimensions, View } from 'react-native';
+import { useState } from 'react';
+import { Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 
 import {
   Button,
@@ -25,7 +26,7 @@ import {
 } from '@components/index';
 import { Spacing } from '@constants/tokens';
 import { SendStage } from '@controllers/sendController';
-import { useAppServices, useFrameDriver, useStore } from '@hooks/index';
+import { useAppServices, useFrameDriver, useStore, useTransferDisplay } from '@hooks/index';
 import { QRSpeedPreference } from '@domain/settings';
 
 export interface SendScreenProps {
@@ -62,6 +63,7 @@ export function SendScreen({ onPickFiles, onBack, frameSize, onCancel }: SendScr
   const { send } = useAppServices();
   const state = useStore(send.state);
   const { width, height } = useWindowDimensions();
+  const [fullscreen, setFullscreen] = useState(false);
 
   /**
    * The code fills the screen, less a margin for the quiet zone.
@@ -72,11 +74,16 @@ export function SendScreen({ onPickFiles, onBack, frameSize, onCancel }: SendScr
    * screen is the single cheapest thing that makes it readable, and it is the
    * fix every optical-transfer implementation ends up recommending first.
    */
-  const displaySize = frameSize ?? Math.floor(Math.min(width, height) * 0.92);
+  const displaySize = frameSize ?? Math.floor(Math.min(width, height) * (fullscreen ? 0.99 : 0.92));
 
   // §8: frames are displayed sequentially. Called before any early return —
   // a hook may not be conditional.
   useFrameDriver(send, state.stage);
+
+  // §11: maximum brightness, no screen sleep, fixed orientation, for exactly
+  // as long as codes are on screen. A sender takes no touches, so without this
+  // the system dims and sleeps it mid-transfer.
+  useTransferDisplay(state.stage === SendStage.Sending || state.stage === SendStage.Paused);
 
   if (state.stage === SendStage.Preparing) {
     // §16: a loading indicator for QR generation.
@@ -107,18 +114,43 @@ export function SendScreen({ onPickFiles, onBack, frameSize, onCancel }: SendScr
     const frame = send.currentFrame(displaySize);
     const { position } = state;
 
-    return (
-      <Screen title={state.stage === SendStage.Paused ? 'Paused' : 'Sending'} scrollable={false}>
+    /*
+      §11: "UI overlays SHOULD NOT obscure QR codes." Fullscreen is that rule
+      taken to its conclusion — the code and nothing else, as large as the
+      device goes, because physical code size is what decides whether the other
+      camera can resolve the modules at the distance it is being held.
+    */
+    const code = (
+      <Pressable
+        onPress={() => setFullscreen((on) => !on)}
+        accessibilityRole="button"
+        accessibilityLabel={fullscreen ? 'Exit full screen' : 'Show the code full screen'}
+        accessibilityHint="A larger code is easier for the other device to read"
+      >
         <QrDisplay
           frame={frame}
           size={displaySize}
           caption={
-            position === undefined
+            fullscreen || position === undefined
               ? undefined
               : `Frame ${position.index + 1} of ${position.frameCount} · ${position.durationMs} ms` +
                 (position.loops > 0 ? ` · pass ${position.loops + 1}` : '')
           }
         />
+      </Pressable>
+    );
+
+    if (fullscreen) {
+      return (
+        <Screen scrollable={false} style={styles.fullscreen}>
+          {code}
+        </Screen>
+      );
+    }
+
+    return (
+      <Screen title={state.stage === SendStage.Paused ? 'Paused' : 'Sending'} scrollable={false}>
+        {code}
 
         {/*
           Controls sit directly beneath the code, above everything else, and the
@@ -237,6 +269,10 @@ export function SendScreen({ onPickFiles, onBack, frameSize, onCancel }: SendScr
 }
 
 const styles = StyleSheet.create({
+  fullscreen: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   row: {
     flexDirection: 'row',
     flexWrap: 'wrap',

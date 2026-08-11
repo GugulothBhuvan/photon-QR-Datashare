@@ -56,6 +56,8 @@ export interface AppServices {
   readonly saveFile: (name: string, bytes: Uint8Array, directoryUri?: string) => Promise<string>;
   /** Asks the user for a download folder (§5.6). `undefined` if cancelled. */
   readonly pickDirectory: () => Promise<string | undefined>;
+  /** Holds the screen awake, bright and unrotated (QR_SPEC §11). Returns the undo. */
+  readonly beginTransferDisplay?: () => () => void;
   /** Records a finished transfer (A12-03, ADR-0007). */
   readonly recordTransfer: (record: TransferRecord) => Promise<void>;
   /** Finished transfers, newest first (ADR-0007). */

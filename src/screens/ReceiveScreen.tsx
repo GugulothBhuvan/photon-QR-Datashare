@@ -26,7 +26,7 @@ import {
 } from '@components/index';
 import { Radius, Spacing } from '@constants/tokens';
 import { ReceiveStage } from '@controllers/receiveController';
-import { useAppServices, useStore } from '@hooks/index';
+import { useAppServices, useStore, useTransferDisplay } from '@hooks/index';
 import { useTheme } from '@components/ThemeProvider';
 import { createStore } from '@state/store';
 
@@ -122,6 +122,13 @@ export function ReceiveScreen({
         </Text>
       )}
     </Card>
+  );
+
+  // §11 applies to a receiver too. A phone held still and pointed at another
+  // screen is exactly what the system reads as idle, and a receiver that
+  // sleeps mid-transfer loses everything collected so far.
+  useTransferDisplay(
+    state.stage === ReceiveStage.Searching || state.stage === ReceiveStage.Scanning,
   );
 
   // §7.4: a receiver watches for a sender rather than being told about one.
@@ -260,10 +267,40 @@ export function ReceiveScreen({
             {state.framesSeen === 0
               ? 'No frames from the camera yet.'
               : state.framesDecoded === 0
-                ? `Camera working (${String(state.framesSeen)} frames), but no code read yet — try moving closer or further away.`
+                ? `Camera working (${String(state.framesSeen)} frames), but no code read yet.`
                 : `Reading codes (${String(state.framesDecoded)} of ${String(state.framesSeen)} frames).`}
           </Text>
         )}
+
+        {/*
+          The fixes, in the order that actually works, once the camera has been
+          running a while with nothing to show for it. Most of them are on the
+          *sending* device, which is the part nobody guesses.
+
+          The threshold is frames rather than seconds: a camera that has
+          delivered nothing has a different problem, and telling someone to
+          move closer would be wrong advice confidently given.
+        */}
+        {state.stage === ReceiveStage.Searching &&
+        state.framesDecoded === 0 &&
+        state.framesSeen > NO_SIGNAL_FRAMES ? (
+          <View style={styles.hint}>
+            <Text variant="label">Nothing decoding?</Text>
+            <Text variant="caption" tone="muted">
+              1. On the sender, tap the code to make it full screen.
+            </Text>
+            <Text variant="caption" tone="muted">
+              2. On the sender, choose Slow.
+            </Text>
+            <Text variant="caption" tone="muted">
+              3. Fill this camera&apos;s view with the code, and rest the phone against something —
+              a hunting autofocus is the usual culprit.
+            </Text>
+            <Text variant="caption" tone="muted">
+              4. Turn the sending screen&apos;s brightness all the way up.
+            </Text>
+          </View>
+        ) : null}
       </Card>
 
       {/*
@@ -324,7 +361,20 @@ function Stat({ label, value }: { readonly label: string; readonly value: string
   );
 }
 
+/**
+ * Frames to see before offering advice.
+ *
+ * About ten seconds of a working camera. Long enough that a user pointing the
+ * phone at a sender still starting up is not interrupted, short enough to
+ * arrive while they are still holding it there.
+ */
+const NO_SIGNAL_FRAMES = 150;
+
 const styles = StyleSheet.create({
+  hint: {
+    gap: Spacing.xs,
+    marginTop: Spacing.sm,
+  },
   overlay: {
     borderRadius: Radius.md,
     borderWidth: 2,

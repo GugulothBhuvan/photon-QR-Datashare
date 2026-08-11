@@ -12,6 +12,8 @@
 export { useStore, useStoreSelector } from './useStore';
 
 export { useElapsed } from './useElapsed';
+export { useTransferDisplay } from './useTransferDisplay';
+
 export { useFrameDriver } from './useFrameDriver';
 
 export {

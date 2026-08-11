@@ -29,6 +29,7 @@ import type { KeyValueStore } from '@storage/ports';
 
 import type { Store } from '@state/store';
 import { createPlatformCamera } from './platformCamera';
+import { createPlatformDisplay } from './platformDisplay';
 import { createQrDecoder } from '@camera/qrDecoder';
 
 import type { ComponentType } from 'react';
@@ -186,6 +187,13 @@ export interface AppGraph {
   /** Asks the user for a download folder (§5.6). `undefined` if cancelled. */
   readonly pickDirectory: () => Promise<string | undefined>;
   /**
+   * Holds the screen awake, bright and unrotated for a transfer (QR_SPEC §11).
+   *
+   * Returns the function that undoes it. A plain function pair rather than the
+   * adapter, so a screen meets §11 without importing a platform module.
+   */
+  readonly beginTransferDisplay: () => () => void;
+  /**
    * Records a finished transfer (A12-03, ADR-0007).
    *
    * A plain function rather than the repository, so the UI stores a transfer
@@ -256,6 +264,9 @@ export function createAppGraph(options: AppCompositionOptions = {}): AppGraph {
   // a test supplies its own settings repository, because the About screen
   // reports whether storage is persistent either way.
   const storage = createDeviceStorage();
+
+  // QR_SPEC §11: screen sleep, brightness and orientation during a transfer.
+  const display = createPlatformDisplay();
 
   // A12-03: transfer history, bounded and ordered by ADR-0007.
   const history = createHistoryRepository({ store: storage.store });
@@ -338,6 +349,13 @@ export function createAppGraph(options: AppCompositionOptions = {}): AppGraph {
         status: files.isDevice ? 'Available' : (files.unavailableReason ?? 'Unavailable'),
       },
       {
+        name: 'Display control',
+        status:
+          display.capabilities.length === 0
+            ? (display.unavailableReason ?? 'Unavailable')
+            : display.capabilities.join(', '),
+      },
+      {
         name: 'Settings storage',
         status: storage.isPersistent
           ? 'Persistent'
@@ -349,6 +367,7 @@ export function createAppGraph(options: AppCompositionOptions = {}): AppGraph {
       : { cameraUnavailableReason: platform.unavailableReason }),
     pickFiles: files.pickFiles,
     pickDirectory: files.pickDirectory,
+    beginTransferDisplay: () => display.begin(),
     recordTransfer: (record) => history.save(record),
     recentTransfers: () => history.recent(),
     saveFile: files.saveFile,
