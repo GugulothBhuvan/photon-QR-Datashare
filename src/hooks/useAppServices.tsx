@@ -15,6 +15,7 @@ import { createContext, useContext, type ComponentType, type ReactNode } from 'r
 import type { ReceiveController } from '@controllers/receiveController';
 import type { SendController } from '@controllers/sendController';
 import type { SettingsController } from '@controllers/settingsController';
+import type { Store } from '@state/store';
 
 /** Everything a screen may reach. Controllers only — never a service directly. */
 export interface AppServices {
@@ -40,6 +41,14 @@ export interface AppServices {
   readonly cameraPreview?: ComponentType;
   /** Why there is no camera preview, when there is none. */
   readonly cameraUnavailableReason?: string;
+  /**
+   * Failures reported by a camera that did load.
+   *
+   * A store rather than a value, because the failure arrives after the screen
+   * has mounted — a camera that loads and then cannot start is exactly the
+   * case a static reason cannot describe.
+   */
+  readonly cameraErrors?: Store<string | undefined>;
   /** Opens the platform file picker (A12-02). Empty when cancelled. */
   readonly pickFiles: () => Promise<readonly { name: string; content: Uint8Array }[]>;
   /** Saves a received file, returning where it was written. */

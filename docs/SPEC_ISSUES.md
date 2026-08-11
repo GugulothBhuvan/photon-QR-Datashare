@@ -510,6 +510,18 @@ declarations:
 - `pixelFormat: 'rgb'` requested from the pipeline, so no conversion happens in
   Photon's code.
 
+**`'rgb'` is a request, not an answer.** VisionCamera resolves it to one of
+`rgb-bgra-8-bit`, `rgb-rgba-8-bit` or `rgb-rgb-8-bit`, and the last of those is
+documented as RGB *or* RGBX — 24 or 32 bits per pixel. The adapter therefore
+reads the frame's own `pixelFormat` and widens a 24-bit buffer rather than
+assuming four bytes everywhere; assuming would offset every row after the first
+and decode nothing at all. Channel order (BGRA against RGBA) is deliberately
+not corrected: a QR symbol is black on white, so red and blue carry the same
+value in every pixel a decoder reads, and swapping them would cost a pass over
+each frame to change nothing. `sourceBytesPerPixelFor` is unit-tested; which
+format a given handset actually negotiates is **NOT TESTED** and needs a
+device.
+
 The resulting path has no string boundary anywhere:
 
 ```text

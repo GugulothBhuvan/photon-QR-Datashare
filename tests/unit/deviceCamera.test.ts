@@ -11,7 +11,7 @@
  * by a few bytes, which still looks like an image and never decodes.
  */
 import { CameraPermission, PixelFormat, isWellFormed } from '@camera/cameraPort';
-import { createDeviceCamera, toCameraFrame } from '@camera/deviceCamera';
+import { createDeviceCamera, sourceBytesPerPixelFor, toCameraFrame } from '@camera/deviceCamera';
 
 /** A buffer whose bytes encode their own position, so misalignment is visible. */
 function buffer(byteLength: number, fill: (index: number) => number): ArrayBuffer {
@@ -97,6 +97,44 @@ describe('toCameraFrame — raw payload preservation (§14)', () => {
 
     expect(frame.data).toHaveLength(width * height * 4);
     expect(isWellFormed(frame)).toBe(true);
+  });
+
+  it('widens a packed 24-bit frame instead of misreading every row', () => {
+    // `pixelFormat: 'rgb'` is a request; the camera answers with BGRA, RGBA or
+    // packed 24-bit RGB. Reading four bytes per pixel from the last of those
+    // offsets every row after the first and decodes nothing at all.
+    const width = 2;
+    const height = 2;
+    // Three bytes per pixel, each pixel numbered so a misread is visible.
+    const source = Uint8Array.from([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+
+    const frame = toCameraFrame(source.buffer as ArrayBuffer, width, height, 0, width * 3, 3);
+
+    expect(frame.format).toBe(PixelFormat.Rgba);
+    expect(isWellFormed(frame)).toBe(true);
+    // Colour bytes preserved in order, opaque alpha inserted per pixel.
+    expect(Array.from(frame.data)).toEqual([
+      1, 2, 3, 255, 4, 5, 6, 255, 7, 8, 9, 255, 10, 11, 12, 255,
+    ]);
+  });
+});
+
+describe('sourceBytesPerPixelFor — what the camera actually negotiated', () => {
+  it.each(['rgb-bgra-8-bit', 'rgb-rgba-8-bit'])('reads %s as four bytes', (format) => {
+    expect(sourceBytesPerPixelFor(format, 960 * 4, 960)).toBe(4);
+  });
+
+  it('reads a 24-bit stride as three bytes', () => {
+    expect(sourceBytesPerPixelFor('rgb-rgb-8-bit', 960 * 3, 960)).toBe(3);
+  });
+
+  it('reads an RGBX stride as four, since the library documents both', () => {
+    // `rgb-rgb-8-bit` covers RGB *and* RGBX, so the stride settles it.
+    expect(sourceBytesPerPixelFor('rgb-rgb-8-bit', 960 * 4, 960)).toBe(4);
+  });
+
+  it('assumes four bytes for an unknown format rather than corrupting a common one', () => {
+    expect(sourceBytesPerPixelFor('unknown', 960 * 4, 960)).toBe(4);
   });
 });
 

@@ -27,15 +27,31 @@ import { Radius, Spacing } from '@constants/tokens';
 import { ReceiveStage } from '@controllers/receiveController';
 import { useAppServices, useStore } from '@hooks/index';
 import { useTheme } from '@components/ThemeProvider';
+import { createStore } from '@state/store';
 
 export interface ReceiveScreenProps {
   readonly onBack: () => void;
   readonly onComplete?: () => void;
 }
 
+/**
+ * Stands in when the platform reports no camera errors.
+ *
+ * A hook may not be called conditionally, and `cameraErrors` is absent on a
+ * platform with no device camera. Module scope keeps the identity stable, so
+ * the subscription is not rebuilt on every render.
+ */
+const NO_CAMERA_ERRORS = createStore<string | undefined>(undefined);
+
 export function ReceiveScreen({ onBack, onComplete }: ReceiveScreenProps) {
-  const { receive, cameraPreview: CameraPreview, cameraUnavailableReason } = useAppServices();
+  const {
+    receive,
+    cameraPreview: CameraPreview,
+    cameraUnavailableReason,
+    cameraErrors,
+  } = useAppServices();
   const state = useStore(receive.state);
+  const cameraError = useStore(cameraErrors ?? NO_CAMERA_ERRORS);
   const { colors } = useTheme();
 
   // §7.4: a receiver watches for a sender rather than being told about one.
@@ -153,6 +169,17 @@ export function ReceiveScreen({ onBack, onComplete }: ReceiveScreenProps) {
                 ? 'Looking for a sender…'
                 : 'Stopped'}
         </Text>
+
+        {/*
+          §14: a camera that loaded and then failed must say so. Without this
+          the interface showed an empty preview, which looks exactly like a
+          working camera pointed at nothing.
+        */}
+        {cameraError === undefined ? null : (
+          <Text variant="caption" tone="danger">
+            {`Camera error: ${cameraError}`}
+          </Text>
+        )}
       </Card>
 
       {state.stage === ReceiveStage.Complete && onComplete !== undefined ? (

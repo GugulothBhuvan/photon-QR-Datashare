@@ -16,10 +16,11 @@
  * The rest of the application sees only `CameraAdapter` and an opaque
  * component. Nothing above this file knows which camera it received.
  */
-import type { ComponentType } from 'react';
+import { createElement, type ComponentType } from 'react';
 
 import { CameraPermission, type CameraAdapter } from '@camera/cameraPort';
 import { createMemoryCamera } from '@camera/memoryCamera';
+import { createStore, type Store } from '@state/store';
 
 /** What the composition root needs to wire a camera into the graph. */
 export interface PlatformCamera {
@@ -43,6 +44,15 @@ export interface PlatformCamera {
    * intended. The reason is kept and surfaced on the About screen.
    */
   readonly unavailableReason?: string;
+  /**
+   * Camera session failures reported after the module loaded successfully.
+   *
+   * Distinct from `unavailableReason`, which covers a camera that never
+   * loaded. This one covers a camera that loaded and then failed to run — the
+   * case that previously showed an empty preview and said nothing, and left
+   * three device sessions guessing.
+   */
+  readonly errors?: Store<string | undefined>;
 }
 
 /**
@@ -83,9 +93,22 @@ export function createPlatformCamera(force?: 'memory'): PlatformCamera {
       currentPermission: () => CameraPermission.Undetermined,
     });
 
-    const Preview: ComponentType = () => binding.CameraSource({ camera });
+    // **Created as an element, not called as a function.** `CameraSource({...})`
+    // ran the camera's hooks inside this wrapper's own render, so the two
+    // shared a single hook list and `CameraSource` had no component identity —
+    // nothing React could memoize, and no way to stop a parent's re-render
+    // from reconfiguring the camera session.
+    const errors = createStore<string | undefined>(undefined);
 
-    return { adapter: camera.adapter, Preview, isDevice: true };
+    const Preview: ComponentType = () =>
+      createElement(binding.CameraSource, {
+        camera,
+        onError: (message: string) => {
+          errors.setState(() => message);
+        },
+      });
+
+    return { adapter: camera.adapter, Preview, isDevice: true, errors };
   } catch (error: unknown) {
     // No native runtime — Node, the web build, or a device build where the
     // native module did not link. The in-memory camera keeps the app working;

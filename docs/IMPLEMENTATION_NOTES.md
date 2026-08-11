@@ -170,6 +170,19 @@ contract.
 | A10-03 | Downsampling takes the top-left pixel of each block rather than averaging. | §16 recommends minimising cost without prescribing a method. Averaging blurs the hard edges a QR code is made of; a blurred edge thresholds worse than a sharp one that moved. | `src/camera/frameProcessor.ts` | Performance phase, against §16 |
 | A10-04 | Grayscale conversion uses ITU-R BT.601 weights with rounding. | No specification names a luminance formula. BT.601 is the standard weighting; rounding rather than truncating avoids a consistent downward bias of up to one level. | `src/camera/frameProcessor.ts` | — |
 | A10-05 | Transport-level validation (§18) means: a symbol was located, error correction resolved, and payload bytes were extracted. | §18 requires "basic transport integrity" without defining it, and defers packet validation to PACKET_SPEC. These are the checks available at this layer without knowing what a packet is. | `src/camera/qrDecoder.ts` | Against QR_SPEC §18 if it is ever expanded |
+| A10-06 | BGRA and RGBA frames are both delivered as `PixelFormat.Rgba` without correcting channel order. | `pixelFormat: 'rgb'` resolves to BGRA on most Android devices. A QR symbol is black on white, so red and blue hold the same value in every pixel a decoder reads; swapping them would cost a pass over each 2.7 MB frame to change no decode. A frame carrying colour information would need this revisited. | `src/camera/deviceCamera.ts` | Against QR_SPEC §14 if non-monochrome symbols are ever used |
+
+**Why this module's bugs reach hardware.** `src/camera/visionCamera.tsx` cannot
+be unit tested — importing VisionCamera pulls in a TurboModule that only exists
+in a native runtime — and three device sessions were spent on defects that a
+renderer would have caught in one run. The last was ordinary React: fresh
+object and array literals passed to `useFrameOutput` and `<Camera outputs>`,
+which rebuild the frame output and reconfigure the session on identity change.
+Because delivering a frame updates the receive store and re-renders the screen,
+the camera tore down the pipeline that had just produced the frame and never
+delivered a second one. Everything in that file that can hold an identity is
+now memoized, and the exemption is recorded in `tests/system/invariants.test.ts`
+rather than left silent.
 
 ## 3.10 Reconstruction (Phase 7)
 

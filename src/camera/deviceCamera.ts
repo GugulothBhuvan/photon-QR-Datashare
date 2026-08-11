@@ -154,6 +154,9 @@ export function createDeviceCamera(options: DeviceCameraOptions): DeviceCamera {
  * @param bytesPerRow Row stride. Cameras pad rows, so this is frequently
  *   larger than `width * 4`; the padding must be dropped or every row after
  *   the first is offset and nothing decodes.
+ * @param sourceBytesPerPixel Bytes per pixel in `buffer`, from
+ *   {@link sourceBytesPerPixelFor}. Four unless the camera negotiated a packed
+ *   24-bit layout.
  */
 export function toCameraFrame(
   buffer: ArrayBuffer,
@@ -161,13 +164,18 @@ export function toCameraFrame(
   height: number,
   timestamp: number,
   bytesPerRow: number,
+  sourceBytesPerPixel = 4,
 ): CameraFrame {
   const source = new Uint8ClampedArray(buffer);
   const packedRow = width * 4;
 
-  // The common case: no padding, so the buffer is already what the contract
-  // describes and no copy is needed beyond the view.
-  if (bytesPerRow === packedRow && source.length >= packedRow * height) {
+  // The common case: four bytes per pixel with no padding, so the buffer is
+  // already what the contract describes and no copy is needed beyond the view.
+  if (
+    sourceBytesPerPixel === 4 &&
+    bytesPerRow === packedRow &&
+    source.length >= packedRow * height
+  ) {
     return {
       width,
       height,
@@ -177,13 +185,65 @@ export function toCameraFrame(
     };
   }
 
-  // Padded rows: copy each row's meaningful bytes and drop the stride padding.
   const packed = new Uint8ClampedArray(packedRow * height);
 
+  if (sourceBytesPerPixel === 4) {
+    // Padded rows: copy each row's meaningful bytes and drop the stride padding.
+    for (let row = 0; row < height; row += 1) {
+      const start = row * bytesPerRow;
+      packed.set(source.subarray(start, start + packedRow), row * packedRow);
+    }
+
+    return { width, height, format: PixelFormat.Rgba, data: packed, timestamp };
+  }
+
+  // Three bytes per pixel: widen to the contract's four. Without this every
+  // row after the first is offset by `width` bytes and nothing decodes at all
+  // — the failure is total rather than degraded, which is why it is worth
+  // handling a layout most cameras will not choose.
   for (let row = 0; row < height; row += 1) {
-    const start = row * bytesPerRow;
-    packed.set(source.subarray(start, start + packedRow), row * packedRow);
+    let read = row * bytesPerRow;
+    let write = row * packedRow;
+
+    for (let column = 0; column < width; column += 1) {
+      packed[write] = source[read] ?? 0;
+      packed[write + 1] = source[read + 1] ?? 0;
+      packed[write + 2] = source[read + 2] ?? 0;
+      packed[write + 3] = 255;
+      read += 3;
+      write += 4;
+    }
   }
 
   return { width, height, format: PixelFormat.Rgba, data: packed, timestamp };
+}
+
+/**
+ * Bytes per pixel for a negotiated VisionCamera pixel format.
+ *
+ * `pixelFormat: 'rgb'` is a *request*, and the camera answers with one of
+ * `rgb-bgra-8-bit`, `rgb-rgba-8-bit` or `rgb-rgb-8-bit` — the last of which
+ * may be packed 24-bit. Assuming four bytes for all three would corrupt every
+ * row of a 24-bit frame.
+ *
+ * **Channel order is deliberately ignored.** BGRA and RGBA differ only in
+ * which of red and blue comes first, and a QR symbol is black on white, so
+ * both channels carry the same value in the pixels that matter. Swapping them
+ * would cost a pass over every frame to change nothing a decoder reads.
+ *
+ * @param pixelFormat The frame's own `pixelFormat`.
+ * @param bytesPerRow Row stride, used to settle `rgb-rgb-8-bit`, which the
+ *   library documents as RGB *or* RGBX.
+ * @param width Frame width in pixels.
+ */
+export function sourceBytesPerPixelFor(
+  pixelFormat: string,
+  bytesPerRow: number,
+  width: number,
+): number {
+  if (pixelFormat !== 'rgb-rgb-8-bit') {
+    return 4;
+  }
+
+  return width > 0 && Math.floor(bytesPerRow / width) >= 4 ? 4 : 3;
 }

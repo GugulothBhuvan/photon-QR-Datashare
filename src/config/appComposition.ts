@@ -25,6 +25,7 @@ import type { CameraAdapter } from '@camera/cameraPort';
 import { createMemoryCamera } from '@camera/memoryCamera';
 import { createDeviceFiles, type PickedFile } from '@storage/deviceFiles';
 
+import type { Store } from '@state/store';
 import { createPlatformCamera } from './platformCamera';
 import { createQrDecoder } from '@camera/qrDecoder';
 
@@ -128,6 +129,14 @@ export interface AppGraph {
    * where the receive screen falls back to its placeholder.
    */
   readonly cameraPreview?: ComponentType;
+  /**
+   * Failures reported by a camera that did load.
+   *
+   * A store, because the failure arrives after the screen has mounted — a
+   * camera that starts and then drops out is exactly what a static reason
+   * cannot describe.
+   */
+  readonly cameraErrors?: Store<string | undefined>;
   /**
    * Why there is no camera preview, when there is none.
    *
@@ -264,6 +273,7 @@ export function createAppGraph(options: AppCompositionOptions = {}): AppGraph {
     }),
     camera,
     ...(platform?.Preview === undefined ? {} : { cameraPreview: platform.Preview }),
+    ...(platform?.errors === undefined ? {} : { cameraErrors: platform.errors }),
     diagnostics: [
       {
         name: 'Camera',

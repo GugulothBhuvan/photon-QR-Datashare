@@ -10,6 +10,7 @@ import { act, cleanup, render, screen, userEvent, waitFor } from '@testing-libra
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { createMemoryCamera } from '@camera/memoryCamera';
+import { createStore } from '@state/store';
 import { ThemeProvider } from '@components/ThemeProvider';
 import { createAppGraph, createMemorySettingsRepository } from '@config/appComposition';
 import type { Clock, IdGenerator } from '@core/contracts';
@@ -462,6 +463,34 @@ describe('Receive camera availability (Stage 0)', () => {
 
     expect(screen.getByText('Camera access required')).toBeOnTheScreen();
     expect(screen.queryByText('Camera unavailable on this device')).toBeNull();
+  });
+
+  it('surfaces a session failure from a camera that did load', async () => {
+    // A camera that loads and then fails to start is the case a static
+    // `cameraUnavailableReason` cannot describe: the failure arrives after the
+    // screen has mounted. It previously showed an empty preview, which looks
+    // exactly like a working camera pointed at nothing.
+    const graph = makeGraph();
+    const cameraErrors = createStore<string | undefined>(undefined);
+
+    await render(
+      wrap(
+        { ...graph, cameraErrors, cameraPreview: () => null },
+        <ReceiveScreen onBack={jest.fn()} />,
+      ),
+    );
+
+    await act(async () => {
+      await graph.receive.requestPermission();
+    });
+
+    expect(screen.queryByText(/Camera error/)).toBeNull();
+
+    await act(() => {
+      cameraErrors.setState(() => 'Camera device was disconnected');
+    });
+
+    expect(screen.getByText(/Camera device was disconnected/)).toBeOnTheScreen();
   });
 });
 
