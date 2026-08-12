@@ -26,6 +26,34 @@ export {
 } from './encoder';
 
 export {
+  decodeFrame,
+  encodeFrame,
+  fitsUint16,
+  fitsUint32,
+  matchesChecksum,
+  streamIdentity,
+  FRAME_HEADER_BYTES,
+  FRAME_MAGIC,
+  FRAME_VERSION,
+  FrameRejection,
+  type FrameDecodeResult,
+  type FrameHeader,
+} from './frameCodec';
+
+export {
+  fitsContainer,
+  packContainer,
+  safeFileName,
+  unpackContainer,
+  CONTAINER_HEADER_BYTES,
+  CONTAINER_MAGIC,
+  ContainerRejection,
+  type ContainerFile,
+  type ContainerResult,
+  type UnpackedFile,
+} from './container';
+
+export {
   createFountainDecoder,
   type FountainDecoder,
   type FountainDecoderOptions,
