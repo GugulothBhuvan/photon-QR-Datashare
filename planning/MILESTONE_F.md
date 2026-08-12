@@ -27,7 +27,8 @@ Three decisions were taken before any code was written:
 | **F4** | Decoding off the JS thread | Not started — same spike as E4 |
 | **F5** | Backpressure | **Done** — built for the packet engine, reused unchanged |
 | **F6** | Hardware benchmark | Not started |
-| **F7** | Send and receive services, wired at the composition root | **Done** — engine selectable, packet still default |
+| **F7** | Services, controllers, composition wiring | **Done** — engine selectable, packet still default |
+| **F8** | Screens driving the fountain engine | Not started — the last step before F6 |
 
 ---
 

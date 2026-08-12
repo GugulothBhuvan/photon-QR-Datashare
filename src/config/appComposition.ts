@@ -41,6 +41,8 @@ import { createManifestManager } from '@core/manifest/manifestManager';
 import { createPacketManager } from '@core/packet/packetManager';
 import { createSessionManager } from '@core/session/sessionManager';
 
+import { createFountainReceiveController } from '@controllers/fountainReceiveController';
+import { createFountainSendController } from '@controllers/fountainSendController';
 import { createReceiveController } from '@controllers/receiveController';
 import { createSendController } from '@controllers/sendController';
 import { createSettingsController } from '@controllers/settingsController';
@@ -206,6 +208,9 @@ export interface AppGraph {
   readonly fountain: {
     readonly send: ReturnType<typeof createFountainSendService>;
     readonly receive: ReturnType<typeof createFountainReceiveService>;
+    /** Screen-facing state for the rateless engine. */
+    readonly sendController: ReturnType<typeof createFountainSendController>;
+    readonly receiveController: ReturnType<typeof createFountainReceiveController>;
   };
   /**
    * Why there is no camera preview, when there is none.
@@ -353,6 +358,24 @@ export function createAppGraph(options: AppCompositionOptions = {}): AppGraph {
   // needs an encoder of its own; the packet engine's lives inside its service.
   const qrEncoder = createQrEncoder();
 
+  const fountainSend = createFountainSendService({
+    qr: qrEncoder,
+    verifier,
+    // Sixteen bits, drawn from the same id source the sessions use so a test
+    // controls it. Collisions across sender restarts are handled by comparing
+    // the whole stream identity, not by widening this field.
+    randomSeed: () =>
+      Number.parseInt(
+        idGenerator
+          .next()
+          .replace(/[^0-9a-f]/gi, '')
+          .slice(0, 4),
+        16,
+      ) || 1,
+  });
+
+  const fountainReceive = createFountainReceiveService({ camera, decoder, verifier });
+
   const discovery = createDiscoveryService({
     camera,
     decoder,
@@ -395,22 +418,14 @@ export function createAppGraph(options: AppCompositionOptions = {}): AppGraph {
     decoderStats: () => decoder.stats(),
     engine: options.engine ?? TransportEngine.Packet,
     fountain: {
-      send: createFountainSendService({
-        qr: qrEncoder,
-        verifier,
-        // Sixteen bits, drawn from the same id source the sessions use so a
-        // test controls it. Collisions across restarts are handled by
-        // comparing the whole stream identity, not by widening this.
-        randomSeed: () =>
-          Number.parseInt(
-            idGenerator
-              .next()
-              .replace(/[^0-9a-f]/gi, '')
-              .slice(0, 4),
-            16,
-          ) || 1,
+      send: fountainSend,
+      receive: fountainReceive,
+      sendController: createFountainSendController({ sender: fountainSend, clock, toUserMessage }),
+      receiveController: createFountainReceiveController({
+        camera,
+        receiver: fountainReceive,
+        toUserMessage,
       }),
-      receive: createFountainReceiveService({ camera, decoder, verifier }),
     },
     diagnostics: [
       {
