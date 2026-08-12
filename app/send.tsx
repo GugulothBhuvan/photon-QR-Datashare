@@ -12,12 +12,37 @@
 import { useRouter } from 'expo-router';
 
 import { TransferDirection, TransferOutcome } from '@domain/history';
-import { useAppServices } from '@hooks/index';
-import { SendScreen } from '@screens/index';
+import { useAppServices, useEngine } from '@hooks/index';
+import { FountainSendScreen, SendScreen } from '@screens/index';
 
 export default function SendRoute() {
   const router = useRouter();
-  const { send, pickFiles, recordTransfer } = useAppServices();
+  const { send, fountain, pickFiles, recordTransfer } = useAppServices();
+  const engine = useEngine();
+
+  // ADR-0008: two transports, two screens. The rateless one carries a single
+  // file and never ends, so it presents differently enough that one screen
+  // would spend its body deciding which it was.
+  if (engine === 'FOUNTAIN') {
+    return (
+      <FountainSendScreen
+        onPickFile={() => {
+          void pickFiles().then((files) => {
+            const [first] = files;
+
+            if (first !== undefined) {
+              fountain.sendController.chooseFile({
+                name: first.name,
+                mediaType: 'application/octet-stream',
+                content: first.content,
+              });
+            }
+          });
+        }}
+        onBack={() => router.back()}
+      />
+    );
+  }
 
   return (
     <SendScreen

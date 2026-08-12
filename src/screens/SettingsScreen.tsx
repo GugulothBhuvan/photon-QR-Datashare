@@ -35,8 +35,13 @@ export function SettingsScreen({
   protocolVersion = 1,
   onChooseFolder,
 }: SettingsScreenProps) {
-  const { settings } = useAppServices();
+  const { settings, engine: engineStore } = useAppServices();
   const state = useStore(settings.state);
+  const engine = useStore(engineStore);
+
+  const setEngine = (next: 'PACKET' | 'FOUNTAIN'): void => {
+    engineStore.setState(() => next);
+  };
   const current = state.settings;
 
   return (
@@ -139,6 +144,33 @@ export function SettingsScreen({
             void settings.setPerformanceMode(performanceMode);
           }}
         />
+        {/*
+          ADR-0008: two transports ship, and this chooses between them. Both
+          are built at startup, so switching takes effect on the next visit to
+          Send or Receive rather than needing a restart — which is what makes
+          comparing them on one device practical.
+        */}
+        <Text variant="label" tone="muted">
+          Transport
+        </Text>
+        <View style={styles.choices}>
+          <Button
+            label="Packets"
+            variant={engine === 'PACKET' ? 'primary' : 'secondary'}
+            onPress={() => setEngine('PACKET')}
+          />
+          <Button
+            label="Fountain"
+            variant={engine === 'FOUNTAIN' ? 'primary' : 'secondary'}
+            onPress={() => setEngine('FOUNTAIN')}
+          />
+        </View>
+        <Text variant="caption" tone="muted">
+          {engine === 'FOUNTAIN'
+            ? 'One file, no waiting for a start signal, and missed codes cost time rather than the transfer.'
+            : 'Many files per transfer, with resume and recovery. Every code must be caught.'}
+        </Text>
+
         <ListItem title="Protocol version" trailing={String(protocolVersion)} />
         <ListItem title="About" trailing="Open" onPress={onAbout} />
       </Section>

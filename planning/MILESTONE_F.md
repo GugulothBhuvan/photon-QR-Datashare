@@ -28,7 +28,7 @@ Three decisions were taken before any code was written:
 | **F5** | Backpressure | **Done** — built for the packet engine, reused unchanged |
 | **F6** | Hardware benchmark | Not started |
 | **F7** | Services, controllers, composition wiring | **Done** — engine selectable, packet still default |
-| **F8** | Screens driving the fountain engine | Not started — the last step before F6 |
+| **F8** | Screens driving the fountain engine | **Done** — switchable from Settings, no restart |
 
 ---
 
@@ -103,6 +103,25 @@ Unchanged from E4, including the finding that the easy path is closed:
 VisionCamera 5's native scanner returns `value?: string` with no byte accessor,
 which is SI-013 one library later. Spike a worklet runtime hosting jsQR first;
 fall back to a native plugin over ZXing or MLKit if it cannot host one.
+
+# F8 — Screens `[done]`
+
+Two screens rather than a branch inside the existing ones. The rateless send
+screen has no file list because it carries one file, **no progress bar because
+there is nothing to progress towards**, and a sweep-or-repair indicator instead
+of a frame count because the stream does not end. The rateless receive screen
+has **no missing-packet counter**, because there is no such thing as a frame
+that had to arrive.
+
+They keep what is about light rather than about the protocol: a code that fills
+the screen, a fullscreen tap, §11's display hold, and the three-way
+frames-seen-against-frames-decoded diagnostic that took four device sessions to
+learn was necessary.
+
+The engine is a `Store`, switched from Settings under Developer. Both
+controller sets are built at startup whichever is selected, so switching is a
+state change and takes effect on the next visit to Send or Receive — which is
+what makes comparing them on one device practical rather than a reinstall.
 
 # F6 — Hardware benchmark `[not started]`
 

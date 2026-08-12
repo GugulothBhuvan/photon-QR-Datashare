@@ -14,6 +14,7 @@ import { createStore } from '@state/store';
 import { ThemeProvider } from '@components/ThemeProvider';
 import { createAppGraph, createMemorySettingsRepository } from '@config/appComposition';
 import type { Clock, IdGenerator } from '@core/contracts';
+import { FountainSendStage } from '@controllers/fountainSendController';
 import {
   DEFAULT_PACKET_SIZE,
   PACKET_SIZE_OPTIONS,
@@ -28,6 +29,7 @@ import {
   filterHistory,
   formatDuration,
   formatThroughput,
+  FountainSendScreen,
   HistoryScreen,
   HomeScreen,
   ReceiveScreen,
@@ -551,6 +553,56 @@ describe('Receive camera availability (Stage 0)', () => {
     });
 
     expect(screen.getByText(/Camera device was disconnected/)).toBeOnTheScreen();
+  });
+});
+
+describe('transport selection (ADR-0008, F8)', () => {
+  /*
+   * Two engines ship and the UI must actually reach both. A toggle that
+   * changed a value nothing read would look exactly like a working one.
+   */
+
+  it('renders the rateless send screen when the fountain engine is selected', async () => {
+    const graph = makeGraph();
+    graph.engine.setState(() => 'FOUNTAIN');
+
+    await render(wrap(graph, <FountainSendScreen onPickFile={jest.fn()} onBack={jest.fn()} />));
+
+    // One file, not a list: the rateless engine carries exactly one.
+    expect(screen.getByText('No file selected')).toBeOnTheScreen();
+    expect(screen.getByText('Bytes per code')).toBeOnTheScreen();
+  });
+
+  it('starts a real rateless stream on one press', async () => {
+    const graph = makeGraph();
+    graph.fountain.sendController.chooseFile({
+      name: 'a.bin',
+      mediaType: 'application/octet-stream',
+      content: Uint8Array.from({ length: 900 }, (_u, i) => i & 0xff),
+    });
+
+    const user = userEvent.setup();
+    await render(wrap(graph, <FountainSendScreen onPickFile={jest.fn()} onBack={jest.fn()} />));
+
+    await user.press(screen.getByRole('button', { name: 'Start transfer' }));
+
+    expect(graph.fountain.sendController.state.getState().stage).toBe(FountainSendStage.Sending);
+    // A real stream, with real blocks.
+    expect(graph.fountain.sendController.state.getState().k).toBeGreaterThan(0);
+  });
+
+  it('switches engine from Settings without a restart', async () => {
+    // Both controller sets are built at startup, so this is a state change.
+    const graph = makeGraph();
+    const user = userEvent.setup();
+
+    await render(wrap(graph, <SettingsScreen onBack={jest.fn()} onAbout={jest.fn()} />));
+
+    expect(graph.engine.getState()).toBe('PACKET');
+
+    await user.press(screen.getByRole('button', { name: 'Fountain' }));
+
+    expect(graph.engine.getState()).toBe('FOUNTAIN');
   });
 });
 

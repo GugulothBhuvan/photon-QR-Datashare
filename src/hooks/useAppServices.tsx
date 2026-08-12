@@ -15,6 +15,9 @@ import { createContext, useContext, type ComponentType, type ReactNode } from 'r
 import type { ReceiveController } from '@controllers/receiveController';
 import type { SendController } from '@controllers/sendController';
 import type { SettingsController } from '@controllers/settingsController';
+import type { FountainSendController } from '@controllers/fountainSendController';
+import type { FountainReceiveController } from '@controllers/fountainReceiveController';
+import type { TransportEngine } from '@config/appComposition';
 import type { Store } from '@state/store';
 import type { TransferRecord } from '@domain/history';
 
@@ -70,6 +73,18 @@ export interface AppServices {
   readonly recordTransfer: (record: TransferRecord) => Promise<void>;
   /** Finished transfers, newest first (ADR-0007). */
   readonly recentTransfers: () => Promise<readonly TransferRecord[]>;
+  /**
+   * Which optical transport the UI drives (ADR-0008).
+   *
+   * A store, so switching engines is a state change rather than a restart —
+   * both controller sets are built either way.
+   */
+  readonly engine: Store<TransportEngine>;
+  /** Screen-facing state for the rateless engine (ADR-0008). */
+  readonly fountain: {
+    readonly sendController: FountainSendController;
+    readonly receiveController: FountainReceiveController;
+  };
   /** What the platform provided, and why anything missing is missing. */
   readonly diagnostics?: readonly { readonly name: string; readonly status: string }[];
 }

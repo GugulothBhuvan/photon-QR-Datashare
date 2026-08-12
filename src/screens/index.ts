@@ -15,6 +15,8 @@ export {
   type HistoryFilter,
   type HistoryScreenProps,
 } from './HistoryScreen';
+export { FountainReceiveScreen, type FountainReceiveScreenProps } from './FountainReceiveScreen';
+export { FountainSendScreen, type FountainSendScreenProps } from './FountainSendScreen';
 export { HomeScreen, type HomeScreenProps, type RecentTransfer } from './HomeScreen';
 export { ReceiveScreen, type ReceivedFile, type ReceiveScreenProps } from './ReceiveScreen';
 export { SendScreen, type SendScreenProps } from './SendScreen';

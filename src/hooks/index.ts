@@ -12,6 +12,10 @@
 export { useStore, useStoreSelector } from './useStore';
 
 export { useElapsed } from './useElapsed';
+export { useEngine } from './useEngine';
+
+export { useFountainFrameDriver } from './useFountainFrameDriver';
+
 export { useTransferDisplay } from './useTransferDisplay';
 
 export { useFrameDriver } from './useFrameDriver';

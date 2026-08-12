@@ -27,7 +27,7 @@ import { createDeviceFiles, type PickedFile } from '@storage/deviceFiles';
 import { createDeviceStorage } from '@storage/deviceStorage';
 import type { KeyValueStore } from '@storage/ports';
 
-import type { Store } from '@state/store';
+import { createStore, type Store } from '@state/store';
 import { createPlatformCamera, type CameraDrops } from './platformCamera';
 import { createPlatformDisplay } from './platformDisplay';
 import { createQrDecoder, type DecoderStats } from '@camera/qrDecoder';
@@ -197,8 +197,14 @@ export interface AppGraph {
    * layer.
    */
   readonly decoderStats: () => DecoderStats;
-  /** Which transport the UI is driving (ADR-0008). */
-  readonly engine: TransportEngine;
+  /**
+   * Which transport the UI drives (ADR-0008).
+   *
+   * A store rather than a value: both controller sets are built either way, so
+   * switching costs nothing and needs no restart. That is what makes an A/B
+   * comparison on one device practical.
+   */
+  readonly engine: Store<TransportEngine>;
   /**
    * The rateless transport (ADR-0008).
    *
@@ -416,7 +422,7 @@ export function createAppGraph(options: AppCompositionOptions = {}): AppGraph {
     ...(platform?.errors === undefined ? {} : { cameraErrors: platform.errors }),
     ...(platform?.drops === undefined ? {} : { cameraDrops: platform.drops }),
     decoderStats: () => decoder.stats(),
-    engine: options.engine ?? TransportEngine.Packet,
+    engine: createStore<TransportEngine>(options.engine ?? TransportEngine.Packet),
     fountain: {
       send: fountainSend,
       receive: fountainReceive,

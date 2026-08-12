@@ -15,14 +15,39 @@ import { useState } from 'react';
 import { useRouter } from 'expo-router';
 
 import { TransferDirection, TransferOutcome, type HistoryFile } from '@domain/history';
-import { useAppServices } from '@hooks/index';
-import { ReceiveScreen, type ReceivedFile } from '@screens/index';
+import { useAppServices, useEngine } from '@hooks/index';
+import { FountainReceiveScreen, ReceiveScreen, type ReceivedFile } from '@screens/index';
 
 export default function ReceiveRoute() {
   const router = useRouter();
-  const { receive, saveFile, recordTransfer, settings } = useAppServices();
+  const { receive, fountain, saveFile, recordTransfer, settings } = useAppServices();
   const [received, setReceived] = useState<readonly ReceivedFile[]>([]);
   const [saveError, setSaveError] = useState<string | undefined>(undefined);
+  const [savedTo, setSavedTo] = useState<string | undefined>(undefined);
+  const engine = useEngine();
+
+  if (engine === 'FOUNTAIN') {
+    return (
+      <FountainReceiveScreen
+        onBack={() => router.back()}
+        {...(savedTo === undefined ? {} : { savedTo })}
+        onSave={() => {
+          void (async () => {
+            const file = fountain.receiveController.state.getState().file;
+
+            if (file === undefined) {
+              return;
+            }
+
+            // §20.14: the controller only reaches Complete for a file that
+            // verified, so nothing unverified can be written from here.
+            const destination = settings.state.getState().settings.storage.downloadDirectory;
+            setSavedTo(await saveFile(file.name, file.content, destination));
+          })();
+        }}
+      />
+    );
+  }
 
   return (
     <ReceiveScreen
