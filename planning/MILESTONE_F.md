@@ -27,7 +27,7 @@ Three decisions were taken before any code was written:
 | **F4** | Decoding off the JS thread | Not started — same spike as E4 |
 | **F5** | Backpressure | **Done** — built for the packet engine, reused unchanged |
 | **F6** | Hardware benchmark | Not started |
-| **F7** | Send and receive services, wired at the composition root | Not started |
+| **F7** | Send and receive services, wired at the composition root | **Done** — engine selectable, packet still default |
 
 ---
 
@@ -108,9 +108,47 @@ fall back to a native plugin over ZXing or MLKit if it cannot host one.
 The decision point. Both engines ship until a device says which is faster, and
 until then nothing in `HARDWARE_VALIDATION.md` moves off `UNMEASURED`.
 
-# F7 — Wiring `[not started]`
+# F7 — Services and wiring `[done]`
 
-A send service and a receive service over the codec, selectable at the
-composition root, so the UI can drive either engine without knowing which it
-has. The `CameraAdapter` and `QrDecoder` contracts are unchanged, which is what
-keeps this a transport change rather than an architecture one.
+`fountainSendService` turns one file into an **endless** stream of QR frames.
+Endless is the load-bearing word: the packet engine prepares a finite frame
+list and loops it, so what it will ever show is known before it starts. Here
+the sender emits sequence numbers until the user stops and the receiver decides
+when it has enough, so frames are encoded **on demand** — encoding ahead would
+mean deciding a length the protocol does not have.
+
+`fountainReceiveService` starts knowing nothing. No session id is passed in
+because there is nothing to pass: the first frame it decodes carries the block
+count, the block length, the payload length and the checksum, and it begins
+from there. That is the whole difference from `receiveService.ts`, which must
+be handed a session whose manifest has already been accepted and therefore
+cannot begin until discovery has caught a preamble.
+
+Frames from another transfer are **detected, not ignored**, and counted. A
+foreign block XORed into a decoder is undetectable until the final checksum
+fails, so a user pointing a camera at two senders can see why nothing
+progresses.
+
+Failure is an outcome rather than a warning attached to a delivered file:
+`CHECKSUM_FAILED`, `UNREADABLE` and `INTEGRITY_FAILED` are distinct, and §20.14
+forbids presenting a file that did not verify.
+
+Both engines are built whichever is selected — they share the camera, the
+decoder and the QR layer, so carrying both costs a little memory and nothing
+else, and it is what makes F6 a measurement rather than an assertion.
+`engine` defaults to `PACKET`.
+
+## Proven across the real optical path
+
+`tests/integration/fountainOptical.test.ts` drives the real services from the
+real composition root through the **same rasteriser and the same jsQR decoder
+the packet engine uses**, so the two differ in transport and nothing else and a
+later measurement is attributable:
+
+- reconstructs, verifies against the container digest, keeps its name
+- completes **having never seen the start of the stream** — the property the
+  packet engine cannot have at all
+- reconstructs with every third frame never captured
+- reports progress from the first frame read
+- counts foreign frames rather than corrupting itself
+- refuses a block length past QR capacity before displaying anything

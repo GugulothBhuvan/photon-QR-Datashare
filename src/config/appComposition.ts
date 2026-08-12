@@ -31,6 +31,7 @@ import type { Store } from '@state/store';
 import { createPlatformCamera, type CameraDrops } from './platformCamera';
 import { createPlatformDisplay } from './platformDisplay';
 import { createQrDecoder, type DecoderStats } from '@camera/qrDecoder';
+import { createQrEncoder } from '@qr/qrEncoder';
 
 import type { ComponentType } from 'react';
 
@@ -52,6 +53,8 @@ import { createHistoryRepository } from '@repositories/historyRepository';
 import { createValueRepository } from '@repositories/valueRepository';
 
 import { createDiscoveryService } from '@services/discoveryService';
+import { createFountainReceiveService } from '@services/fountainReceiveService';
+import { createFountainSendService } from '@services/fountainSendService';
 import { createReceiveService } from '@services/receiveService';
 import { createTransferService } from '@services/transferService';
 
@@ -130,7 +133,27 @@ export interface AppCompositionOptions {
    */
   readonly camera?: CameraAdapter;
   readonly settingsRepository?: ValueRepository<AppConfig>;
+  /**
+   * Which optical transport to build (ADR-0008).
+   *
+   * Defaults to `PACKET`, and stays there until a hardware benchmark shows the
+   * fountain engine wins on real devices. Both are built either way — they
+   * share the camera, the decoder and the QR layer, so having both costs a
+   * little memory and nothing else, and it is what makes the comparison
+   * measurable rather than asserted.
+   */
+  readonly engine?: TransportEngine;
 }
+
+/** The two optical transports (ADR-0008). */
+export const TransportEngine = {
+  /** Indexed packets, manifest preamble, resume and recovery. PROTOCOL_SPEC. */
+  Packet: 'PACKET',
+  /** Rateless frames, no preamble, one file. Supersedes the sections ADR-0008 lists. */
+  Fountain: 'FOUNTAIN',
+} as const;
+
+export type TransportEngine = (typeof TransportEngine)[keyof typeof TransportEngine];
 
 /** Everything the UI needs, wired. */
 export interface AppGraph {
@@ -172,6 +195,18 @@ export interface AppGraph {
    * layer.
    */
   readonly decoderStats: () => DecoderStats;
+  /** Which transport the UI is driving (ADR-0008). */
+  readonly engine: TransportEngine;
+  /**
+   * The rateless transport (ADR-0008).
+   *
+   * Present whichever engine is selected, so a benchmark can drive both
+   * without building a second graph.
+   */
+  readonly fountain: {
+    readonly send: ReturnType<typeof createFountainSendService>;
+    readonly receive: ReturnType<typeof createFountainReceiveService>;
+  };
   /**
    * Why there is no camera preview, when there is none.
    *
@@ -314,6 +349,10 @@ export function createAppGraph(options: AppCompositionOptions = {}): AppGraph {
   // packet is decoded from a crop rather than a full scan.
   const decoder = createQrDecoder();
 
+  // The fountain engine encodes frames on demand rather than up front, so it
+  // needs an encoder of its own; the packet engine's lives inside its service.
+  const qrEncoder = createQrEncoder();
+
   const discovery = createDiscoveryService({
     camera,
     decoder,
@@ -354,6 +393,25 @@ export function createAppGraph(options: AppCompositionOptions = {}): AppGraph {
     ...(platform?.errors === undefined ? {} : { cameraErrors: platform.errors }),
     ...(platform?.drops === undefined ? {} : { cameraDrops: platform.drops }),
     decoderStats: () => decoder.stats(),
+    engine: options.engine ?? TransportEngine.Packet,
+    fountain: {
+      send: createFountainSendService({
+        qr: qrEncoder,
+        verifier,
+        // Sixteen bits, drawn from the same id source the sessions use so a
+        // test controls it. Collisions across restarts are handled by
+        // comparing the whole stream identity, not by widening this.
+        randomSeed: () =>
+          Number.parseInt(
+            idGenerator
+              .next()
+              .replace(/[^0-9a-f]/gi, '')
+              .slice(0, 4),
+            16,
+          ) || 1,
+      }),
+      receive: createFountainReceiveService({ camera, decoder, verifier }),
+    },
     diagnostics: [
       {
         name: 'Camera',
