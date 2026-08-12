@@ -196,6 +196,18 @@ left missing (§20.14), and a write that fails says so.
 
 ---
 
+## Milestone E — Receiver performance
+
+Transport-layer optimisation, no protocol change. See `planning/MILESTONE_E.md`
+and `docs/DECIMEN_COMPARISON.md`.
+
+Backpressure and crop tracking are done; diagnostics are partial; decoding is
+still on the JavaScript thread and no hardware measurement exists. Fountain
+coding and self-describing frames are deliberately excluded — both replace the
+wire format and delete the resume and recovery engines, which is a v2 question.
+
+---
+
 ## Stage 4 — Specification-blocked protocol features
 
 Each needs a specification change before it can be implemented honestly. None
