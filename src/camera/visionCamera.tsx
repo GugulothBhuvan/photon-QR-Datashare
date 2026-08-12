@@ -66,6 +66,17 @@ export interface CameraSourceProps {
    * working and pointed at nothing.
    */
   readonly onError?: (message: string) => void;
+  /**
+   * Reports how many frames were dropped, and why.
+   *
+   * Two counts because they mean opposite things. **Backpressure** drops are
+   * this application declining frames the decoder cannot keep up with — the
+   * healthy state at any camera rate above the decode rate, and the number
+   * that says how much headroom a faster decoder would buy. **Pipeline** drops
+   * are the camera failing to deliver, which is a different problem with a
+   * different fix.
+   */
+  readonly onDropped?: (counts: { backpressure: number; pipeline: number }) => void;
 }
 
 /**
@@ -79,6 +90,7 @@ function CameraSourceImpl({
   targetWidth = 960,
   isActive = true,
   onError,
+  onDropped,
 }: CameraSourceProps) {
   const device = useCameraDevice('back');
   const permission = useCameraPermission();
@@ -104,6 +116,34 @@ function CameraSourceImpl({
    * and the JavaScript side's writes would never be seen.
    */
   const inFlight = useMemo(() => createSynchronizable(false), []);
+
+  /**
+   * Frames the worklet declined because JavaScript was still busy.
+   *
+   * Counted on the camera thread, so it cannot be a plain variable: the two
+   * runtimes do not share memory. Read on a timer rather than reported per
+   * drop, because a callback per dropped frame would cost exactly what
+   * dropping the frame was meant to save.
+   */
+  const backpressureDrops = useMemo(() => createSynchronizable(0), []);
+  const pipelineDrops = useRef(0);
+
+  useEffect(() => {
+    if (onDropped === undefined) {
+      return;
+    }
+
+    const timer = setInterval(() => {
+      onDropped({
+        backpressure: backpressureDrops.getDirty(),
+        pipeline: pipelineDrops.current,
+      });
+    }, 1000);
+
+    return () => {
+      clearInterval(timer);
+    };
+  }, [onDropped, backpressureDrops]);
 
   useEffect(() => {
     // Three states, not two. `hasPermission ? Granted : Denied` would report a
@@ -218,6 +258,7 @@ function CameraSourceImpl({
 
         // Dropped before anything is allocated. See `inFlight`.
         if (inFlight.getDirty()) {
+          backpressureDrops.setBlocking((previous) => previous + 1);
           return;
         }
 
@@ -280,7 +321,7 @@ function CameraSourceImpl({
         frame.dispose();
       }
     },
-    [deliverFrame, deliverLuminance, inFlight],
+    [deliverFrame, deliverLuminance, inFlight, backpressureDrops],
   );
 
   const frameOutput = useFrameOutput({
@@ -307,8 +348,12 @@ function CameraSourceImpl({
     // Reported rather than left to VisionCamera's default console warning. A
     // receiver dropping every frame and a receiver receiving none look the
     // same from outside, and they need opposite fixes.
-    onFrameDropped: (reason) => {
-      onError?.(`frames dropped: ${reason}`);
+    // The camera failing to deliver, which is not the same as this
+    // application declining to accept. Counted, not reported as an error: at
+    // any camera rate above the decode rate some dropping is the healthy
+    // state, and an error banner for it would cry wolf.
+    onFrameDropped: () => {
+      pipelineDrops.current += 1;
     },
   });
 

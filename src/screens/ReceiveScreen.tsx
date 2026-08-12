@@ -67,6 +67,9 @@ export interface ReceiveScreenProps {
  */
 const NO_CAMERA_ERRORS = createStore<string | undefined>(undefined);
 
+/** The same stand-in, for a platform that counts no dropped frames. */
+const NO_CAMERA_DROPS = createStore({ backpressure: 0, pipeline: 0 });
+
 export function ReceiveScreen({
   onBack,
   onComplete,
@@ -78,9 +81,12 @@ export function ReceiveScreen({
     cameraPreview: CameraPreview,
     cameraUnavailableReason,
     cameraErrors,
+    cameraDrops,
+    decoderStats,
   } = useAppServices();
   const state = useStore(receive.state);
   const cameraError = useStore(cameraErrors ?? NO_CAMERA_ERRORS);
+  const drops = useStore(cameraDrops ?? NO_CAMERA_DROPS);
   const { colors } = useTheme();
 
   /**
@@ -93,6 +99,7 @@ export function ReceiveScreen({
    * packets collected is the protocol.
    */
   const [rates, setRates] = useState({ seen: 0, decoded: 0, collected: 0 });
+  const [decode, setDecode] = useState({ decodes: 0, meanMs: 0, trackedHits: 0 });
   const sample = useRef({ seen: 0, decoded: 0, collected: 0, at: 0 });
 
   useEffect(() => {
@@ -110,6 +117,8 @@ export function ReceiveScreen({
         });
       }
 
+      setDecode(decoderStats?.() ?? { decodes: 0, meanMs: 0, trackedHits: 0 });
+
       sample.current = {
         seen: current.framesSeen,
         decoded: current.framesDecoded,
@@ -121,7 +130,7 @@ export function ReceiveScreen({
     return () => {
       clearInterval(timer);
     };
-  }, [receive]);
+  }, [receive, decoderStats]);
 
   /**
    * What the receiver is doing, rendered in **every** state.
@@ -150,6 +159,24 @@ export function ReceiveScreen({
       </Text>
       <Text variant="caption" tone="muted">
         {`Rate: ${rates.seen.toFixed(1)} captured/s · ${rates.decoded.toFixed(1)} decoded/s · ${rates.collected.toFixed(1)} packets/s`}
+      </Text>
+      {/*
+        Decode cost, which turns "slow" into a number that can be optimised,
+        and the tracking hit rate, which says whether the crop path is earning
+        its place on this device.
+      */}
+      <Text variant="caption" tone="muted">
+        {`Decode: ${decode.meanMs.toFixed(0)} ms mean · ${String(decode.trackedHits)} of ${String(decode.decodes)} from a crop`}
+      </Text>
+      {/*
+        Two drop counts, never summed. Backpressure drops are this application
+        declining frames the decoder cannot keep up with — the healthy state
+        above the decode rate, and a measure of what a faster decoder would
+        buy. Pipeline drops are the camera failing to deliver, which is a
+        different problem with a different fix.
+      */}
+      <Text variant="caption" tone="muted">
+        {`Dropped: ${String(drops.backpressure)} waiting on decode · ${String(drops.pipeline)} by the camera`}
       </Text>
       {state.errorMessage === undefined ? null : (
         <Text variant="caption" tone="danger">

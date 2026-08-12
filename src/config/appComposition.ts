@@ -28,9 +28,9 @@ import { createDeviceStorage } from '@storage/deviceStorage';
 import type { KeyValueStore } from '@storage/ports';
 
 import type { Store } from '@state/store';
-import { createPlatformCamera } from './platformCamera';
+import { createPlatformCamera, type CameraDrops } from './platformCamera';
 import { createPlatformDisplay } from './platformDisplay';
-import { createQrDecoder } from '@camera/qrDecoder';
+import { createQrDecoder, type DecoderStats } from '@camera/qrDecoder';
 
 import type { ComponentType } from 'react';
 
@@ -162,6 +162,16 @@ export interface AppGraph {
    * cannot describe.
    */
   readonly cameraErrors?: Store<string | undefined>;
+  /** Frames not delivered to the decoder, by cause (E6). */
+  readonly cameraDrops?: Store<CameraDrops>;
+  /**
+   * What decoding has cost so far (E6).
+   *
+   * A function returning plain numbers rather than the decoder, so a screen
+   * can report §12's "as quickly as practical" without importing the camera
+   * layer.
+   */
+  readonly decoderStats: () => DecoderStats;
   /**
    * Why there is no camera preview, when there is none.
    *
@@ -298,9 +308,15 @@ export function createAppGraph(options: AppCompositionOptions = {}): AppGraph {
   // §7.4–§7.6: a receiver learns the session from a scanned frame rather than
   // from a caller. Exposed on the graph so the receive screen can listen for a
   // sender instead of being handed a session id it could not know.
+  // **One decoder, shared.** Two of them meant two independent crop anchors,
+  // and the anchor discovery found while locking on was thrown away the moment
+  // collection started. Sharing carries it across, so the first collected
+  // packet is decoded from a crop rather than a full scan.
+  const decoder = createQrDecoder();
+
   const discovery = createDiscoveryService({
     camera,
-    decoder: createQrDecoder(),
+    decoder,
     sessions,
     manifests,
     supportedVersions: [PROTOCOL_VERSION],
@@ -309,7 +325,7 @@ export function createAppGraph(options: AppCompositionOptions = {}): AppGraph {
   const receives = createReceiveService({
     camera,
     cipher,
-    decoder: createQrDecoder(),
+    decoder,
     packets,
     manifests,
     verifier,
@@ -336,6 +352,8 @@ export function createAppGraph(options: AppCompositionOptions = {}): AppGraph {
     camera,
     ...(platform?.Preview === undefined ? {} : { cameraPreview: platform.Preview }),
     ...(platform?.errors === undefined ? {} : { cameraErrors: platform.errors }),
+    ...(platform?.drops === undefined ? {} : { cameraDrops: platform.drops }),
+    decoderStats: () => decoder.stats(),
     diagnostics: [
       {
         name: 'Camera',

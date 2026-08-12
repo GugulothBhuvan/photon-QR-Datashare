@@ -53,6 +53,20 @@ export interface PlatformCamera {
    * three device sessions guessing.
    */
   readonly errors?: Store<string | undefined>;
+  /**
+   * How many frames were dropped, and by whom.
+   *
+   * Backpressure drops are this application declining what the decoder cannot
+   * keep up with; pipeline drops are the camera failing to deliver. The two
+   * need opposite fixes, so they are never summed.
+   */
+  readonly drops?: Store<CameraDrops>;
+}
+
+/** Frames not delivered to the decoder, by cause. */
+export interface CameraDrops {
+  readonly backpressure: number;
+  readonly pipeline: number;
 }
 
 /**
@@ -99,6 +113,7 @@ export function createPlatformCamera(force?: 'memory'): PlatformCamera {
     // nothing React could memoize, and no way to stop a parent's re-render
     // from reconfiguring the camera session.
     const errors = createStore<string | undefined>(undefined);
+    const drops = createStore<CameraDrops>({ backpressure: 0, pipeline: 0 });
 
     const Preview: ComponentType = () =>
       createElement(binding.CameraSource, {
@@ -106,9 +121,12 @@ export function createPlatformCamera(force?: 'memory'): PlatformCamera {
         onError: (message: string) => {
           errors.setState(() => message);
         },
+        onDropped: (counts: CameraDrops) => {
+          drops.setState(() => counts);
+        },
       });
 
-    return { adapter: camera.adapter, Preview, isDevice: true, errors };
+    return { adapter: camera.adapter, Preview, isDevice: true, errors, drops };
   } catch (error: unknown) {
     // No native runtime — Node, the web build, or a device build where the
     // native module did not link. The in-memory camera keeps the app working;

@@ -205,3 +205,58 @@ describe('receiver discovery (§7.4–§7.6)', () => {
     expect(listener.state().stage).toBe(DiscoveryStage.Searching);
   });
 });
+
+describe('discovery stands down once collection begins (E6)', () => {
+  /*
+   * Discovery stayed subscribed after a session started, decoding every frame
+   * a second time only to discard the result — its own guard returns early
+   * once a manifest has been accepted. That doubled the cost of every frame
+   * during the part of the transfer that actually matters.
+   */
+
+  it('stops decoding once a session has been adopted', async () => {
+    const { harness, prepared } = preparedFrames('0a900000');
+
+    await harness.graph.receive.listen();
+
+    // The preamble: handshake, then manifest. This is what starts a session.
+    harness.camera.push(captureOf(prepared.frames.at(0)!));
+    harness.camera.push(captureOf(prepared.frames.at(1)!));
+    harness.camera.emitAll();
+
+    const decodesAtLock = harness.graph.decoderStats().decodes;
+    expect(harness.graph.receive.state.getState().sessionId).toBeDefined();
+
+    // Data frames now. Exactly one decode each: the receive service. A second
+    // subscriber would double this.
+    const data = [...prepared.frames].slice(2);
+
+    for (const frame of data) {
+      harness.camera.push(captureOf(frame));
+    }
+    harness.camera.emitAll();
+
+    expect(data.length).toBeGreaterThan(0);
+    expect(harness.graph.decoderStats().decodes - decodesAtLock).toBe(data.length);
+
+    await harness.graph.receive.stop();
+  });
+});
+
+describe('decoder cost is measured (E6)', () => {
+  it('counts decodes and reports a mean, so "slow" becomes a number', () => {
+    const { harness } = preparedFrames('0aa00000');
+
+    expect(harness.graph.decoderStats().decodes).toBe(0);
+
+    harness.graph.discovery.listen(() => undefined);
+    void harness.camera.start();
+    harness.camera.push(blankCapture());
+    harness.camera.emitAll();
+
+    const stats = harness.graph.decoderStats();
+
+    expect(stats.decodes).toBe(1);
+    expect(stats.meanMs).toBeGreaterThanOrEqual(0);
+  });
+});

@@ -114,6 +114,23 @@ export interface QrDecoderOptions {
   readonly trackPadding?: number;
 }
 
+/** What decoding has cost so far. */
+export interface DecoderStats {
+  /** Frames put through `decode`, whatever the outcome. */
+  readonly decodes: number;
+  /**
+   * Mean milliseconds per decode.
+   *
+   * The number that turns "the receiver is slow" into something that can be
+   * optimised. Measured here rather than by a caller because this is the layer
+   * that knows what a decode *is*: the crop attempt, the fallback full scan
+   * and the exposure screen are all inside it.
+   */
+  readonly meanMs: number;
+  /** Frames a crop decoded without a full scan — the tracking hit rate. */
+  readonly trackedHits: number;
+}
+
 export interface QrDecoder {
   /**
    * Attempts to decode one frame (§14, §18).
@@ -122,6 +139,8 @@ export interface QrDecoder {
    * — a camera produces dozens per second — not an exceptional one.
    */
   decode(frame: CameraFrame): DecodeResult;
+  /** Cumulative decoding cost, for §12's "as quickly as practical". */
+  stats(): DecoderStats;
 }
 
 /** Creates a QR decoder. */
@@ -133,6 +152,10 @@ export function createQrDecoder(options: QrDecoderOptions = {}): QrDecoder {
 
   /** Where the last symbol was, and when — the crop path's anchor. */
   let tracked: { region: FrameRegion; at: number } | undefined;
+
+  let decodes = 0;
+  let totalMs = 0;
+  let trackedHits = 0;
 
   /** The axis-aligned box a located symbol occupies, padded to lead movement. */
   function paddedRegion(location: SymbolLocation): FrameRegion {
@@ -209,7 +232,29 @@ export function createQrDecoder(options: QrDecoderOptions = {}): QrDecoder {
   }
 
   return {
+    stats() {
+      return {
+        decodes,
+        meanMs: decodes === 0 ? 0 : totalMs / decodes,
+        trackedHits,
+      };
+    },
+
     decode(frame) {
+      const startedAt = Date.now();
+      decodes += 1;
+
+      try {
+        return attempt(frame);
+      } finally {
+        totalMs += Date.now() - startedAt;
+      }
+    },
+  };
+
+  /** The decode itself, wrapped above so timing covers every exit. */
+  function attempt(frame: CameraFrame): DecodeResult {
+    {
       if (!isWellFormed(frame)) {
         return { ok: false, reason: DecodeFailure.MalformedFrame };
       }
@@ -234,6 +279,7 @@ export function createQrDecoder(options: QrDecoderOptions = {}): QrDecoder {
         const hit = scan(crop(frame, box));
 
         if (hit !== null) {
+          trackedHits += 1;
           // Back into frame coordinates: everything above this layer describes
           // positions in the frame it was handed, not in a crop it never saw.
           found = { binaryData: hit.binaryData, location: shift(hit.location, box.x, box.y) };
@@ -271,6 +317,6 @@ export function createQrDecoder(options: QrDecoderOptions = {}): QrDecoder {
         location: found.location,
         timestamp: frame.timestamp,
       };
-    },
-  };
+    }
+  }
 }

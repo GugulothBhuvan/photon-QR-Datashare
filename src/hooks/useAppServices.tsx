@@ -50,6 +50,14 @@ export interface AppServices {
    * case a static reason cannot describe.
    */
   readonly cameraErrors?: Store<string | undefined>;
+  /** Frames not delivered to the decoder, by cause (E6). */
+  readonly cameraDrops?: Store<{ readonly backpressure: number; readonly pipeline: number }>;
+  /** What decoding has cost so far (E6). Plain numbers, no camera types. */
+  readonly decoderStats?: () => {
+    readonly decodes: number;
+    readonly meanMs: number;
+    readonly trackedHits: number;
+  };
   /** Opens the platform file picker (A12-02). Empty when cancelled. */
   readonly pickFiles: () => Promise<readonly { name: string; content: Uint8Array }[]>;
   /** Saves a received file, returning where it was written. */

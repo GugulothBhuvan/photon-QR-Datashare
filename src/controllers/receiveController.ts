@@ -248,6 +248,15 @@ export function createReceiveController(options: ReceiveControllerOptions): Rece
           (sessionId) => {
             session = receives.start(sessionId, applyProgress);
 
+            // **Discovery stops here, and halves the cost of every frame.**
+            // It stayed subscribed after a session began, decoding every frame
+            // a second time only to discard the result — its own guard returns
+            // early once a manifest has been accepted. The receive service is
+            // the only consumer that matters from this point, and §11.11's
+            // repeated preamble is exactly what it already ignores.
+            listener?.stop();
+            listener = undefined;
+
             state.setState((previous) => ({
               ...previous,
               stage: ReceiveStage.Scanning,

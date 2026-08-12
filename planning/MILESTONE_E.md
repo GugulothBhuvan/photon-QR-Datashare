@@ -26,7 +26,7 @@ the resume and recovery engines. They stay recorded in `DECIMEN_COMPARISON.md`
 | **E3** | Backpressure | **Done** — committed, *not yet in an APK* |
 | **E4** | Decoding off the JS thread | **Not started** — the largest remaining win |
 | **E5** | Crop tracking | **Done** — measured 802 ms → 80 ms per frame |
-| **E6** | Diagnostics | **Partial** — counters and rates ship; drops and throughput do not |
+| **E6** | Diagnostics | **Done** — counters, rates, decode cost, tracking hit rate, both drop causes |
 | **E7** | Hardware benchmark | **Not started** |
 | **E8** | Frame rate above 10 fps | **Not started** |
 | **E9** | More than one code on screen | **Not started** |
@@ -129,15 +129,37 @@ Shipping today, on the receive screen in every state:
 - rates per second: captured, decoded, packets collected
 - camera session errors, and refusal reasons in plain words
 
-Still missing, and each has a specific diagnostic job:
+Added:
 
 | Metric | Answers |
 | --- | --- |
-| Frames dropped by backpressure | Is the decoder the bottleneck, or the camera? |
-| Frames dropped by the camera pipeline | Is `onFrameDropped` firing, and why? |
-| Throughput, KB/s | The only number comparable to another implementation |
-| Packets recovered vs duplicate | Is the sender looping over ground already covered? |
-| Decode time, ms/frame | Turns "slow" into a number that can be optimised |
+| Decode mean, ms/frame | Turns "slow" into a number that can be optimised |
+| Crop hit rate | Whether the E5 tracking is earning its place on this device |
+| Backpressure drops | How much headroom a faster decoder would buy |
+| Pipeline drops | Whether the camera itself is failing to deliver |
+
+The two drop counts are reported separately and never summed: backpressure
+drops are this application declining what the decoder cannot keep up with,
+which is the healthy state at any camera rate above the decode rate. Pipeline
+drops are the camera failing to deliver. They need opposite fixes.
+
+Still outstanding: throughput in KB/s, which is the only figure directly
+comparable to another implementation, and duplicate-packet counting.
+
+## Two costs found while instrumenting
+
+Instrumenting the receiver immediately paid for itself.
+
+**The graph built two decoders**, one for discovery and one for the receive
+service, so the crop anchor discovery established while locking on was
+discarded the moment collection began. They now share one, and the first
+collected packet is decoded from a crop rather than a full scan.
+
+**Discovery stayed subscribed after a session started**, decoding every frame a
+second time only to discard the result — its own guard returns early once a
+manifest has been accepted. Every frame during the part of the transfer that
+actually matters cost twice what it needed to. Discovery now stands down when
+collection begins, which is pinned by a test that counts decodes per frame.
 
 The case for treating this as a requirement rather than a nicety: four device
 sessions were spent on a receiver that reported nothing, and the eventual root
