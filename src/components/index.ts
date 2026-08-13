@@ -13,6 +13,8 @@ export { Card, type CardProps } from './Card';
 export { ListItem, type ListItemProps } from './ListItem';
 export { ProgressBar, ProgressRing, type ProgressProps } from './Progress';
 export { QrDisplay, type QrDisplayProps } from './QrDisplay';
+export { ScanTracker, type ScanTrackerProps } from './ScanTracker';
+
 export { Screen, type ScreenProps } from './Screen';
 
 export {

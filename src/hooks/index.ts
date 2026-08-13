@@ -14,6 +14,8 @@ export { useStore, useStoreSelector } from './useStore';
 export { useElapsed } from './useElapsed';
 export { useEngine } from './useEngine';
 
+export { useScanTracker, type ScanTrackerState } from './useScanTracker';
+
 export { useFountainFrameDriver } from './useFountainFrameDriver';
 
 export { useTransferDisplay } from './useTransferDisplay';

@@ -60,6 +60,20 @@ export interface AppServices {
     readonly decodes: number;
     readonly meanMs: number;
     readonly trackedHits: number;
+    /** Where the last code was read, for the scan tracker. */
+    readonly lastSymbol:
+      | {
+          readonly location: {
+            readonly topLeft: { readonly x: number; readonly y: number };
+            readonly topRight: { readonly x: number; readonly y: number };
+            readonly bottomLeft: { readonly x: number; readonly y: number };
+            readonly bottomRight: { readonly x: number; readonly y: number };
+          };
+          readonly frameWidth: number;
+          readonly frameHeight: number;
+          readonly at: number;
+        }
+      | undefined;
   };
   /** Opens the platform file picker (A12-02). Empty when cancelled. */
   readonly pickFiles: () => Promise<readonly { name: string; content: Uint8Array }[]>;

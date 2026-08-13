@@ -12,7 +12,7 @@
  * delivering nothing and a camera delivering unreadable frames are told apart
  * at a glance.
  */
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import {
@@ -22,12 +22,13 @@ import {
   ListItem,
   LoadingState,
   ProgressRing,
+  ScanTracker,
   Screen,
   Text,
 } from '@components/index';
 import { Radius, Spacing } from '@constants/tokens';
 import { FountainReceiveStage } from '@controllers/fountainReceiveController';
-import { useAppServices, useStore, useTransferDisplay } from '@hooks/index';
+import { useAppServices, useScanTracker, useStore, useTransferDisplay } from '@hooks/index';
 import { useTheme } from '@components/ThemeProvider';
 
 export interface FountainReceiveScreenProps {
@@ -55,6 +56,9 @@ export function FountainReceiveScreen({ onBack, onSave, savedTo }: FountainRecei
   const receive = fountain.receiveController;
   const state = useStore(receive.state);
   const { colors } = useTheme();
+  const [previewSize, setPreviewSize] = useState<{ width: number; height: number } | undefined>(
+    undefined,
+  );
 
   const active =
     state.stage === FountainReceiveStage.Watching ||
@@ -63,6 +67,10 @@ export function FountainReceiveScreen({ onBack, onSave, savedTo }: FountainRecei
   // §11 applies to a receiver too: a phone held still and pointed at a screen
   // is exactly what the system reads as idle.
   useTransferDisplay(active);
+
+  // The rateless receiver had a plain square and no lock indicator at all —
+  // nothing on screen said whether a code had been seen.
+  const tracker = useScanTracker(active);
 
   useEffect(() => {
     if (state.stage === FountainReceiveStage.Stopped) {
@@ -127,9 +135,17 @@ export function FountainReceiveScreen({ onBack, onSave, savedTo }: FountainRecei
       <View
         style={[styles.preview, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}
         accessibilityLabel="Camera preview"
+        onLayout={(event) => {
+          setPreviewSize(event.nativeEvent.layout);
+        }}
       >
         {CameraPreview === undefined ? null : <CameraPreview />}
-        <View style={[styles.reticle, { borderColor: colors.primary }]} />
+        <ScanTracker
+          locked={tracker.locked}
+          {...(tracker.quad === undefined ? {} : { quad: tracker.quad })}
+          {...(tracker.frame === undefined ? {} : { frame: tracker.frame })}
+          {...(previewSize === undefined ? {} : { preview: previewSize })}
+        />
         <Text variant="caption" tone="muted" style={styles.previewText}>
           {CameraPreview === undefined
             ? 'Camera preview unavailable on this platform'
@@ -239,12 +255,6 @@ const styles = StyleSheet.create({
   previewText: {
     bottom: Spacing.md,
     position: 'absolute',
-  },
-  reticle: {
-    aspectRatio: 1,
-    borderWidth: 2,
-    position: 'absolute',
-    width: '72%',
   },
   stat: {
     gap: 2,

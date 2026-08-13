@@ -129,6 +129,27 @@ export interface DecoderStats {
   readonly meanMs: number;
   /** Frames a crop decoded without a full scan — the tracking hit rate. */
   readonly trackedHits: number;
+  /**
+   * Where the last symbol was found, and in what frame.
+   *
+   * `SymbolLocation` has carried the four corners since this module was
+   * written — its own comment says "for framing guidance in the UI" — and
+   * nothing ever read it. A receiver that can draw where it is actually
+   * looking tells a user whether their aim is working, which no counter does.
+   *
+   * The frame dimensions travel with it because the corners are in frame
+   * pixels and only the screen knows how those map to what it draws.
+   */
+  readonly lastSymbol: TrackedSymbol | undefined;
+}
+
+/** A located symbol, with the frame it was located in. */
+export interface TrackedSymbol {
+  readonly location: SymbolLocation;
+  readonly frameWidth: number;
+  readonly frameHeight: number;
+  /** Frame timestamp, so a stale lock can fade rather than freeze. */
+  readonly at: number;
 }
 
 export interface QrDecoder {
@@ -156,6 +177,7 @@ export function createQrDecoder(options: QrDecoderOptions = {}): QrDecoder {
   let decodes = 0;
   let totalMs = 0;
   let trackedHits = 0;
+  let lastSymbol: TrackedSymbol | undefined;
 
   /** The axis-aligned box a located symbol occupies, padded to lead movement. */
   function paddedRegion(location: SymbolLocation): FrameRegion {
@@ -237,6 +259,7 @@ export function createQrDecoder(options: QrDecoderOptions = {}): QrDecoder {
         decodes,
         meanMs: decodes === 0 ? 0 : totalMs / decodes,
         trackedHits,
+        lastSymbol,
       };
     },
 
@@ -308,6 +331,13 @@ export function createQrDecoder(options: QrDecoderOptions = {}): QrDecoder {
       if (trackSymbols) {
         tracked = { region: paddedRegion(found.location), at: frame.timestamp };
       }
+
+      lastSymbol = {
+        location: found.location,
+        frameWidth: frame.width,
+        frameHeight: frame.height,
+        at: frame.timestamp,
+      };
 
       return {
         ok: true,

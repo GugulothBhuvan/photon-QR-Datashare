@@ -21,6 +21,7 @@ import {
   ListItem,
   LoadingState,
   ProgressRing,
+  ScanTracker,
   Screen,
   Text,
 } from '@components/index';
@@ -28,7 +29,7 @@ import { Radius, Spacing } from '@constants/tokens';
 import { ReceiveStage } from '@controllers/receiveController';
 // The advice names a value the sender actually offers, by construction.
 import { RELIABLE_PACKET_SIZE } from '@controllers/sendController';
-import { useAppServices, useStore, useTransferDisplay } from '@hooks/index';
+import { useAppServices, useScanTracker, useStore, useTransferDisplay } from '@hooks/index';
 import { useTheme } from '@components/ThemeProvider';
 import { createStore } from '@state/store';
 
@@ -132,6 +133,16 @@ export function ReceiveScreen({
     };
   }, [receive, decoderStats]);
 
+  /** The preview's measured size — the tracker maps frame pixels onto it. */
+  const [previewSize, setPreviewSize] = useState<{ width: number; height: number } | undefined>(
+    undefined,
+  );
+
+  /** Where the last code was read, polled fast enough to follow it. */
+  const tracker = useScanTracker(
+    state.stage === ReceiveStage.Searching || state.stage === ReceiveStage.Scanning,
+  );
+
   /**
    * What the receiver is doing, rendered in **every** state.
    *
@@ -195,34 +206,6 @@ export function ReceiveScreen({
       )}
     </Card>
   );
-
-  /**
-   * Whether a code was read in the last moment.
-   *
-   * Drives the corner brackets, so the lock means something: it lights when
-   * symbols are actually being decoded and goes out when they stop. A static
-   * frame that always looked the same told a user nothing about whether their
-   * aim was working.
-   */
-  const [locked, setLocked] = useState(false);
-  const lastDecoded = useRef(state.framesDecoded);
-
-  useEffect(() => {
-    if (state.framesDecoded === lastDecoded.current) {
-      return;
-    }
-
-    lastDecoded.current = state.framesDecoded;
-    setLocked(true);
-
-    // Long enough to be seen at any frame rate, short enough that the light
-    // goes out promptly when the code leaves the view.
-    const timer = setTimeout(() => setLocked(false), 600);
-
-    return () => {
-      clearTimeout(timer);
-    };
-  }, [state.framesDecoded]);
 
   // §11 applies to a receiver too. A phone held still and pointed at another
   // screen is exactly what the system reads as idle, and a receiver that
@@ -318,6 +301,11 @@ export function ReceiveScreen({
       <View
         style={[styles.preview, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}
         accessibilityLabel="Camera preview"
+        onLayout={(event) => {
+          // Measured, because the tracker maps frame pixels onto *this* box and
+          // cannot know its size any other way.
+          setPreviewSize(event.nativeEvent.layout);
+        }}
       >
         {/*
           The live camera on a device, the placeholder everywhere else. The
@@ -333,18 +321,12 @@ export function ReceiveScreen({
           square. The brackets brighten while codes are being read, which is
           the only aiming feedback the receiver can honestly give.
         */}
-        <View style={styles.reticle} pointerEvents="none">
-          {CORNERS.map((corner) => (
-            <View
-              key={corner.key}
-              style={[
-                styles.corner,
-                corner.style,
-                { borderColor: locked ? colors.success : colors.border },
-              ]}
-            />
-          ))}
-        </View>
+        <ScanTracker
+          locked={tracker.locked}
+          {...(tracker.quad === undefined ? {} : { quad: tracker.quad })}
+          {...(tracker.frame === undefined ? {} : { frame: tracker.frame })}
+          {...(previewSize === undefined ? {} : { preview: previewSize })}
+        />
         <Text variant="caption" tone="muted" style={styles.previewText}>
           {CameraPreview === undefined
             ? 'Camera preview unavailable on this platform'
@@ -491,52 +473,10 @@ function Stat({ label, value }: { readonly label: string; readonly value: string
  */
 const NO_SIGNAL_FRAMES = 150;
 
-/** Arm length of each corner bracket, in points. */
-const CORNER_LENGTH = 28;
-
-/** Thickness of the two borders that form each bracket. */
-const CORNER_WEIGHT = 3;
-
-/**
- * The four brackets that mark the scan target.
- *
- * Each is a box showing only the two borders that meet at its corner, which
- * draws an L without any path work.
- */
-const CORNERS = [
-  {
-    key: 'tl',
-    style: { borderLeftWidth: CORNER_WEIGHT, borderTopWidth: CORNER_WEIGHT, left: 0, top: 0 },
-  },
-  {
-    key: 'tr',
-    style: { borderRightWidth: CORNER_WEIGHT, borderTopWidth: CORNER_WEIGHT, right: 0, top: 0 },
-  },
-  {
-    key: 'bl',
-    style: { borderBottomWidth: CORNER_WEIGHT, borderLeftWidth: CORNER_WEIGHT, bottom: 0, left: 0 },
-  },
-  {
-    key: 'br',
-    style: {
-      borderBottomWidth: CORNER_WEIGHT,
-      borderRightWidth: CORNER_WEIGHT,
-      bottom: 0,
-      right: 0,
-    },
-  },
-] as const;
-
 const styles = StyleSheet.create({
   hint: {
     gap: Spacing.xs,
     marginTop: Spacing.sm,
-  },
-  corner: {
-    borderColor: 'transparent',
-    height: CORNER_LENGTH,
-    position: 'absolute',
-    width: CORNER_LENGTH,
   },
   preview: {
     alignItems: 'center',
@@ -549,11 +489,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     overflow: 'hidden',
     width: '100%',
-  },
-  reticle: {
-    aspectRatio: 1,
-    position: 'absolute',
-    width: '72%',
   },
   previewText: {
     bottom: Spacing.md,

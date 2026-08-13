@@ -127,6 +127,13 @@ function CameraSourceImpl({
    */
   const backpressureDrops = useMemo(() => createSynchronizable(0), []);
   const pipelineDrops = useRef(0);
+  /**
+   * When the last frame reached JavaScript, for the watchdog below.
+   *
+   * Zero rather than `Date.now()`: reading the clock during render is impure,
+   * and the watchdog only compares against it after a delivery has set it.
+   */
+  const lastDelivery = useRef(0);
 
   useEffect(() => {
     if (onDropped === undefined) {
@@ -219,6 +226,7 @@ function CameraSourceImpl({
       } finally {
         // Released whatever happened. A decode that throws must not stop the
         // camera thread ever sending another frame.
+        lastDelivery.current = Date.now();
         inFlight.setBlocking(false);
       }
     },
@@ -369,6 +377,31 @@ function CameraSourceImpl({
   );
 
   useEffect(() => {
+    /**
+     * Clears an in-flight flag that was never released.
+     *
+     * The flag is set on the camera thread and cleared on the JavaScript
+     * thread, so anything that stops the scheduled callback arriving — the app
+     * backgrounding mid-hop, a runtime tearing down — leaves it set forever
+     * and **the camera never sends another frame**. The failure is total and
+     * silent, and looks exactly like a camera that has stopped working.
+     *
+     * Two seconds is far longer than any decode: the current mean is 80 ms.
+     */
+    const watchdog = setInterval(() => {
+      if (inFlight.getDirty() && Date.now() - lastDelivery.current > 2_000) {
+        // Nothing has come back for two seconds while a frame is marked in
+        // flight, so the hop was lost.
+        inFlight.setBlocking(false);
+      }
+    }, 1_000);
+
+    return () => {
+      clearInterval(watchdog);
+    };
+  }, [inFlight]);
+
+  useEffect(() => {
     // Cleared on both edges. A frame in flight when this unmounts never
     // reaches its callback, and a flag left set would stop the camera thread
     // ever sending another one — a receiver that works until you leave the
@@ -400,8 +433,15 @@ function CameraSourceImpl({
    */
   const focusCentre = useCallback((): void => {
     const camera = cameraRef.current;
+    const { width, height } = previewSize.current;
 
-    if (camera === null) {
+    // **Guarded, and the receiver stops focusing without it.** `onStarted`
+    // fires before `onLayout` has measured, so this ran with a zero size and
+    // asked the camera to focus the point (0, 0) — the top-left corner of the
+    // view — *continuously*. Pointed at another phone's screen that corner is
+    // the room behind it, so the lens settled on the background and held it
+    // there, and every frame of the code came back soft.
+    if (camera === null || width === 0 || height === 0) {
       return;
     }
 
@@ -431,6 +471,9 @@ function CameraSourceImpl({
       onStarted={focusCentre}
       onLayout={(event) => {
         previewSize.current = event.nativeEvent.layout;
+        // Focused here as well as on start, because whichever of the two
+        // happens second is the first moment both a camera and a size exist.
+        focusCentre();
       }}
       // §12 again, by hand: a user who can see the preview is soft has an
       // immediate way to fix it, which no automatic policy can guarantee.
